@@ -35,8 +35,8 @@ interface JWTPayload {
   role: string;
 }
 
-const publicRoutes = ["/", "/login", "/signup", "/api/auth/login", "/api/auth/signup", "/api/auth/logout"];
-const authRoutes = ["/login", "/signup"];
+const publicRoutes = ["/", "/login", "/api/auth/login", "/api/auth/logout"];
+const authRoutes = ["/login"];
 
 function getDashboardRoute(role: string): string {
   switch (role) {
