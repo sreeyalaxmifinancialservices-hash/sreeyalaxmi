@@ -73,7 +73,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton
               className="data-[slot=sidebar-menu-button]:p-1.5!"
-              render={<a href="/admin/dashboard" />}
+              render={<a href="/" />}
             >
               <img src="/logo.png" alt="Sreeyalakshmi Logo" className="size-8! min-w-8! rounded-full object-cover group-data-[collapsible=icon]:size-7! group-data-[collapsible=icon]:min-w-7!" />
               <span className="text-base font-semibold">SREEYALAXMI FINANCIAL</span>

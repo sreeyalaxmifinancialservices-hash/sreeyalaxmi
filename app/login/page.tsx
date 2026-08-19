@@ -150,6 +150,16 @@ export default function Login() {
 
       {/* Card */}
       <div className="relative z-10 w-full max-w-md">
+        <a
+          href="/"
+          className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-black hover:text-gray-600 transition-colors"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m12 19-7-7 7-7" />
+            <path d="M19 12H5" />
+          </svg>
+          Home
+        </a>
         <div className="fade-in-up text-center mb-8">
           <img src="/logo.png" alt="Sreeyalakshmi Logo" className="w-20 h-20 rounded-full object-cover mb-4 mx-auto" />
           <h1 className="text-2xl font-bold text-black tracking-tight">SREEYALAXMI FINANCIAL SERVICES PVT. LTD.</h1>

@@ -28,22 +28,22 @@ async function seed() {
   }
   log(`Created ${DEFAULT_SETTINGS.length} default settings`);
 
-  const existingAdmin = await User.findOne({ email: "admin@lms.com" });
+  const existingAdmin = await User.findOne({ email: "sreeyalaxmifinancialservices@gmail.com" });
   if (existingAdmin) {
     log("Admin user already exists. Skipping creation.");
     await mongoose.disconnect();
     return;
   }
 
-  const password = await bcrypt.hash("admin123", 10);
+  const password = await bcrypt.hash("@Sreeyalaxmi.2026", 10);
   await User.create({
     name: "Admin",
-    email: "admin@lms.com",
+    email: "sreeyalaxmifinancialservices@gmail.com",
     password,
     role: "admin",
     isActive: true,
   });
-  log("Created admin user (admin@lms.com / admin123)");
+  log("Created admin user (sreeyalaxmifinancialservices@gmail.com / @Sreeyalaxmi.2026)");
 
   await mongoose.disconnect();
   log("Disconnected from MongoDB");
