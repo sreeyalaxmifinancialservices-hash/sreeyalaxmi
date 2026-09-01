@@ -7,8 +7,8 @@ export interface ILeader extends Document {
   lastName: string;
   phone: string;
   email: string;
-  group: mongoose.Types.ObjectId;
-  center?: mongoose.Types.ObjectId;
+  center: mongoose.Types.ObjectId;
+  group?: mongoose.Types.ObjectId;
   member?: mongoose.Types.ObjectId;
   status: "active" | "inactive";
 }
@@ -21,8 +21,8 @@ const LeaderSchema = new Schema<ILeader>(
     lastName: { type: String, required: true },
     phone: { type: String, required: true },
     email: { type: String, required: true },
-    group: { type: Schema.Types.ObjectId, ref: "Group", required: true },
-    center: { type: Schema.Types.ObjectId, ref: "Center" },
+    center: { type: Schema.Types.ObjectId, ref: "Center", required: true },
+    group: { type: Schema.Types.ObjectId, ref: "Group" },
     member: { type: Schema.Types.ObjectId, ref: "Member" },
     status: { type: String, enum: ["active", "inactive"], default: "active" },
   },

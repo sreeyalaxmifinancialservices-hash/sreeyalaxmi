@@ -38,7 +38,6 @@ export async function GET(req: NextRequest) {
       Group.find(filter)
         .populate("center", "name code")
         .populate("branch", "name code")
-        .populate("leader", "firstName lastName phone member")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -83,37 +82,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const createData: Record<string, any> = { ...parsed.data };
-    delete createData.leader;
-
-    const group = await Group.create(createData);
-
-    if (parsed.data.leader) {
-      const existingLeader = await Leader.findById(parsed.data.leader).lean();
-      let leaderId = existingLeader?._id;
-
-      if (!leaderId) {
-        const member = await Member.findById(parsed.data.leader).lean();
-        if (member) {
-          const leaderCount = await Leader.countDocuments();
-          const leader = await Leader.create({
-            leaderId: `LD${String(leaderCount + 1).padStart(6, "0")}`,
-            firstName: member.firstName,
-            lastName: member.lastName,
-            phone: member.phone,
-            email: member.email || `${member.memberCode}@member.local`,
-            group: group._id,
-            member: member._id,
-            status: "active",
-          });
-          leaderId = leader._id;
-        }
-      }
-
-      if (leaderId) {
-        await Group.findByIdAndUpdate(group._id, { leader: leaderId });
-      }
-    }
+    const group = await Group.create(parsed.data);
 
     return NextResponse.json(
       { success: true, data: group, message: "Group created successfully" },

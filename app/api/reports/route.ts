@@ -443,7 +443,7 @@ export async function GET(req: NextRequest) {
           {
             $lookup: {
               from: "leaders",
-              localField: "groupDoc.leader",
+              localField: "centerDoc.leader",
               foreignField: "_id",
               as: "leaderDoc",
             },

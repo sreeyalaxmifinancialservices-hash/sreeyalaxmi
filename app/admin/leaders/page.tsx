@@ -14,27 +14,27 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { PlusIcon, SearchIcon, PencilIcon, Trash2Icon, Loader2Icon } from "lucide-react"
 import { toast } from "sonner"
 
-interface Group { _id: string; name: string }
+interface Center { _id: string; name: string }
 interface Member { _id: string; firstName: string; lastName: string; phone: string; email?: string; memberCode: string }
 interface Leader {
   _id: string; leaderId: string; firstName: string; lastName: string
-  phone: string; email: string; group: Group; status: "active" | "inactive"
+  phone: string; email: string; center: Center; group?: any; status: "active" | "inactive"
 }
 interface Pagination { page: number; limit: number; total: number; pages: number }
 
 const emptyForm = {
   leaderId: "", firstName: "", lastName: "", phone: "", email: "",
-  group: "", memberId: "", status: "active" as "active" | "inactive",
+  center: "", group: "", memberId: "", status: "active" as "active" | "inactive",
 }
 
 export default function LeadersPage() {
   const [leaders, setLeaders] = useState<Leader[]>([])
-  const [groups, setGroups] = useState<Group[]>([])
+  const [centers, setCenters] = useState<Center[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 10, total: 0, pages: 0 })
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
-  const [groupFilter, setGroupFilter] = useState("all")
+  const [centerFilter, setCenterFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -44,19 +44,19 @@ export default function LeadersPage() {
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const fetchGroups = useCallback(async () => {
+  const fetchCenters = useCallback(async () => {
     try {
-      const res = await fetch("/api/groups?limit=100")
+      const res = await fetch("/api/centers?limit=100")
       const json = await res.json()
-      if (json.success) setGroups(json.data)
+      if (json.success) setCenters(json.data)
     } catch {}
   }, [])
 
-  const fetchMembers = useCallback(async (groupId: string) => {
+  const fetchMembers = useCallback(async (centerId: string) => {
     setMembers([])
-    if (!groupId) return
+    if (!centerId) return
     try {
-      const res = await fetch(`/api/members?group=${groupId}&limit=100&status=active`)
+      const res = await fetch(`/api/members?center=${centerId}&limit=100&status=active`)
       const json = await res.json()
       if (json.success) setMembers(json.data)
     } catch {}
@@ -67,7 +67,7 @@ export default function LeadersPage() {
     try {
       const params = new URLSearchParams({ page: String(page), limit: "10" })
       if (search) params.set("search", search)
-      if (groupFilter !== "all") params.set("group", groupFilter)
+      if (centerFilter !== "all") params.set("center", centerFilter)
       if (statusFilter !== "all") params.set("status", statusFilter)
       const res = await fetch(`/api/leaders?${params}`)
       const json = await res.json()
@@ -82,9 +82,9 @@ export default function LeadersPage() {
     } finally {
       setLoading(false)
     }
-  }, [search, groupFilter, statusFilter])
+  }, [search, centerFilter, statusFilter])
 
-  useEffect(() => { fetchGroups() }, [fetchGroups])
+  useEffect(() => { fetchCenters() }, [fetchCenters])
   useEffect(() => { fetchLeaders(1) }, [fetchLeaders])
 
   const validate = (): boolean => {
@@ -94,7 +94,7 @@ export default function LeadersPage() {
     if (!form.lastName.trim()) e.lastName = "Last name is required"
     if (!form.phone.trim() || form.phone.length < 10) e.phone = "Phone must be at least 10 digits"
     if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = "Valid email is required"
-    if (!form.group) e.group = "Group is required"
+    if (!form.center) e.center = "Center is required"
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -155,7 +155,8 @@ export default function LeadersPage() {
     setForm({
       leaderId: l.leaderId, firstName: l.firstName, lastName: l.lastName,
       phone: l.phone, email: l.email,
-      group: typeof l.group === "object" ? l.group._id : l.group,
+      center: typeof l.center === "object" ? (l.center as any)._id : (l.center as any),
+      group: "",
       memberId: "",
       status: l.status,
     })
@@ -180,12 +181,12 @@ export default function LeadersPage() {
                     <Input placeholder="Search by name or leader ID..." className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && fetchLeaders(1)} />
                   </div>
                   <select
-                    value={groupFilter}
-                    onChange={(e) => { setGroupFilter(e.target.value); fetchLeaders(1) }}
+                    value={centerFilter}
+                    onChange={(e) => { setCenterFilter(e.target.value); fetchLeaders(1) }}
                     className="w-full sm:w-[160px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 dark:[&>option]:bg-background dark:[&>option]:text-foreground"
                   >
-                    <option value="all">All Groups</option>
-                    {groups.map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}
+                    <option value="all">All Centers</option>
+                    {centers.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
                   </select>
                   <select
                     value={statusFilter}
@@ -205,7 +206,7 @@ export default function LeadersPage() {
                         <TableHead>Name</TableHead>
                         <TableHead>Phone</TableHead>
                         <TableHead>Email</TableHead>
-                        <TableHead>Group</TableHead>
+                        <TableHead>Center</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
@@ -226,7 +227,7 @@ export default function LeadersPage() {
                             <TableCell>{l.firstName} {l.lastName}</TableCell>
                             <TableCell>{l.phone}</TableCell>
                             <TableCell>{l.email}</TableCell>
-                            <TableCell>{l.group?.name}</TableCell>
+                            <TableCell>{l.center?.name || (l.group as any)?.name || "—"}</TableCell>
                             <TableCell><Badge variant={l.status === "active" ? "default" : "secondary"}>{l.status}</Badge></TableCell>
                             <TableCell className="text-right">
                               <Button variant="ghost" size="icon" onClick={() => openEdit(l)}><PencilIcon className="size-4" /></Button>
@@ -285,19 +286,19 @@ export default function LeadersPage() {
               </div>
             </div>
             <div>
-              <Label>Group *</Label>
+              <Label>Center *</Label>
               <select
-                value={form.group}
+                value={form.center}
                 onChange={(e) => {
-                  setForm({ ...form, group: e.target.value, memberId: "" })
+                  setForm({ ...form, center: e.target.value, memberId: "" })
                   fetchMembers(e.target.value)
                 }}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 dark:[&>option]:bg-background dark:[&>option]:text-foreground"
               >
-                <option value="">Select group</option>
-                {groups.map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}
+                <option value="">Select center</option>
+                {centers.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
               </select>
-              {errors.group && <p className="text-sm text-destructive mt-1">{errors.group}</p>}
+              {errors.center && <p className="text-sm text-destructive mt-1">{errors.center}</p>}
             </div>
             {!editing && (
               <div>
@@ -317,7 +318,7 @@ export default function LeadersPage() {
                   }}
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 dark:[&>option]:bg-background dark:[&>option]:text-foreground"
                 >
-                  <option value="">Select member from group</option>
+                  <option value="">Select member from center</option>
                   {members.map((m) => <option key={m._id} value={m._id}>{m.firstName} {m.lastName} ({m.memberCode})</option>)}
                 </select>
               </div>

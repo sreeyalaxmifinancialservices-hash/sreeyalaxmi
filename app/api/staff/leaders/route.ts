@@ -3,7 +3,6 @@ import { connectDB } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import Staff from "@/lib/models/Staff";
 import Leader from "@/lib/models/Leader";
-import Group from "@/lib/models/Group";
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,10 +17,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Staff not found" }, { status: 404 });
     }
 
-    const groups = await Group.find({ center: { $in: staff.assignedCenters }, status: "active" }).lean();
-    const groupIds = groups.map((g) => g._id);
-    const leaderIds = groups.filter((g) => g.leader).map((g) => g.leader);
-
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search") || "";
     const page = parseInt(searchParams.get("page") || "1");
@@ -29,7 +24,7 @@ export async function GET(req: NextRequest) {
     const skip = (page - 1) * limit;
 
     const filter: Record<string, any> = {
-      _id: { $in: leaderIds.length > 0 ? leaderIds : ["000000000000000000000000"] },
+      center: { $in: staff.assignedCenters },
     };
 
     if (search) {
@@ -42,6 +37,7 @@ export async function GET(req: NextRequest) {
 
     const [leaders, total] = await Promise.all([
       Leader.find(filter)
+        .populate("center", "name code")
         .populate("group", "name code")
         .sort({ createdAt: -1 })
         .skip(skip)

@@ -27,7 +27,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const leader = await Leader.findOne({ group: groupId, status: "active" }).lean();
+    const centerIdForLeader = centerId || group.center;
+    const leader = await Leader.findOne({ center: centerIdForLeader, status: "active" }).lean();
 
     const members = await Member.find({ group: groupId, status: "active" }).lean();
 

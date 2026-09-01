@@ -86,9 +86,9 @@ export async function POST(req: NextRequest) {
     const staffDoc = await Staff.findById(staff).lean();
 
     let leaderId = leader || undefined;
-    if (!leaderId && group) {
-      const groupDoc = await Group.findById(group).lean();
-      leaderId = groupDoc?.leader || undefined;
+    if (!leaderId && center) {
+      const centerDocForLeader = await Center.findById(center).lean();
+      leaderId = (centerDocForLeader as any)?.leader || undefined;
     }
 
     const collection = await Collection.create({

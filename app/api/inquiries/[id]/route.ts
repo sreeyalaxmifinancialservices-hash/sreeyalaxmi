@@ -157,24 +157,29 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       try {
         if (action === "add" && leaderData) {
           const leaderCount = await Leader.countDocuments();
-          const leaderId = `LD${String(leaderCount + 1).padStart(6, "0")}`;
+          const newLeaderId = `LD${String(leaderCount + 1).padStart(6, "0")}`;
 
           const leader = await Leader.create({
-            leaderId,
+            leaderId: newLeaderId,
             firstName: leaderData.firstName,
             lastName: leaderData.lastName || "-",
             phone: leaderData.phone || "-",
             email: leaderData.email || "-",
+            center: leaderData.center,
             group: leaderData.group,
             status: "active",
           });
 
-          if (leaderData.group) {
-            await Group.findByIdAndUpdate(leaderData.group, { leader: leader._id });
+          if (leaderData.center) {
+            await Center.findByIdAndUpdate(leaderData.center, { leader: leader._id });
           }
         } else if (action === "edit" && leaderId && newValues) {
           await Leader.findByIdAndUpdate(leaderId, newValues);
         } else if (action === "delete" && leaderId) {
+          const leaderDoc = await Leader.findById(leaderId).lean();
+          if (leaderDoc?.center) {
+            await Center.findByIdAndUpdate(leaderDoc.center, { $unset: { leader: "" } });
+          }
           await Leader.findByIdAndUpdate(leaderId, { status: "inactive" });
         }
       } catch (applyError) {

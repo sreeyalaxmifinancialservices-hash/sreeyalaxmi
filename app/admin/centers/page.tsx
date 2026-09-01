@@ -17,6 +17,8 @@ import { toast } from "sonner"
 
 interface Branch { _id: string; name: string; code: string }
 interface Staff { _id: string; firstName: string; lastName: string }
+interface Leader { _id: string; firstName: string; lastName: string; phone?: string }
+interface MemberItem { _id: string; firstName: string; lastName: string; memberCode: string }
 interface Center {
   _id: string
   name: string
@@ -26,6 +28,7 @@ interface Center {
   meetingTime: string
   location: string
   staff?: Staff
+  leader?: Leader
   status: "active" | "inactive"
 }
 interface Pagination { page: number; limit: number; total: number; pages: number }
@@ -34,7 +37,7 @@ const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
 
 const emptyForm = {
   name: "", code: "", branch: "", meetingDay: "", meetingTime: "", location: "",
-  staff: "", status: "active" as "active" | "inactive",
+  staff: "", leader: "", status: "active" as "active" | "inactive",
 }
 
 export default function CentersPage() {
@@ -49,6 +52,7 @@ export default function CentersPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Center | null>(null)
   const [deleting, setDeleting] = useState<Center | null>(null)
+  const [centerMembers, setCenterMembers] = useState<MemberItem[]>([])
   const [form, setForm] = useState(emptyForm)
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -58,6 +62,15 @@ export default function CentersPage() {
       const res = await fetch("/api/branches?limit=100")
       const json = await res.json()
       if (json.success) setBranches(json.data)
+    } catch {}
+  }, [])
+
+  const fetchCenterMembers = useCallback(async (centerId: string) => {
+    if (!centerId) { setCenterMembers([]); return }
+    try {
+      const res = await fetch(`/api/members?center=${centerId}&limit=100`)
+      const json = await res.json()
+      if (json.success) setCenterMembers(json.data)
     } catch {}
   }, [])
 
@@ -108,6 +121,8 @@ export default function CentersPage() {
         location: form.location, status: form.status,
       }
       if (form.staff) payload.staff = form.staff
+      if (form.leader) payload.leader = form.leader
+      else if (editing) payload.leader = ""
       const url = editing ? `/api/centers/${editing._id}` : "/api/centers"
       const method = editing ? "PUT" : "POST"
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
@@ -149,6 +164,7 @@ export default function CentersPage() {
   const openCreate = () => {
     setEditing(null)
     setForm(emptyForm)
+    setCenterMembers([])
     setErrors({})
     setDialogOpen(true)
   }
@@ -161,9 +177,12 @@ export default function CentersPage() {
       meetingDay: c.meetingDay, meetingTime: c.meetingTime,
       location: c.location,
       staff: c.staff?._id || "",
+      leader: (c.leader as any)?._id || (c.leader as any)?.member || "",
       status: c.status,
     })
     setErrors({})
+    setCenterMembers([])
+    fetchCenterMembers(c._id)
     setDialogOpen(true)
   }
 
@@ -208,6 +227,7 @@ export default function CentersPage() {
                         <TableHead>Branch</TableHead>
                         <TableHead>Meeting Day</TableHead>
                         <TableHead>Meeting Time</TableHead>
+                        <TableHead>Leader</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
@@ -216,11 +236,11 @@ export default function CentersPage() {
                       {loading ? (
                         Array.from({ length: 5 }).map((_, i) => (
                           <TableRow key={i}>
-                            {Array.from({ length: 7 }).map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>)}
+                            {Array.from({ length: 8 }).map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>)}
                           </TableRow>
                         ))
                       ) : centers.length === 0 ? (
-                        <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">No centers found</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground">No centers found</TableCell></TableRow>
                       ) : (
                         centers.map((c) => (
                           <TableRow key={c._id}>
@@ -229,6 +249,7 @@ export default function CentersPage() {
                             <TableCell>{c.branch?.name}</TableCell>
                             <TableCell>{c.meetingDay}</TableCell>
                             <TableCell>{c.meetingTime}</TableCell>
+                            <TableCell>{c.leader ? `${c.leader.firstName} ${c.leader.lastName}` : "—"}</TableCell>
                             <TableCell><Badge variant={c.status === "active" ? "default" : "secondary"}>{c.status}</Badge></TableCell>
                             <TableCell className="text-right">
                               <Button variant="ghost" size="icon" onClick={() => openEdit(c)}><PencilIcon className="size-4" /></Button>
@@ -298,6 +319,20 @@ export default function CentersPage() {
               <Label>Location *</Label>
               <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
               {errors.location && <p className="text-sm text-destructive mt-1">{errors.location}</p>}
+            </div>
+            <div>
+              <Label>Leader <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              {editing ? (
+                <Select value={form.leader} onValueChange={(v) => setForm({ ...form, leader: v === "__none__" ? "" : (v ?? "") })} items={[{ label: "No leader", value: "__none__" }, ...centerMembers.map(m => ({ label: `${m.firstName} ${m.lastName} (${m.memberCode})`, value: m._id }))]}>
+                  <SelectTrigger><SelectValue placeholder="Select leader from center members" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No leader</SelectItem>
+                    {centerMembers.map((m) => <SelectItem key={m._id} value={m._id}>{m.firstName} {m.lastName} ({m.memberCode})</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-sm text-muted-foreground">Create center first, then assign a leader from its members.</p>
+              )}
             </div>
             <div>
               <Label>Status</Label>

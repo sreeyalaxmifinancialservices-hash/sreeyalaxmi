@@ -23,6 +23,7 @@ export const centerSchema = z.object({
   meetingTime: z.string().min(1, "Meeting time is required"),
   location: z.string().min(1, "Location is required"),
   staff: z.string().optional(),
+  leader: z.string().optional(),
   status: z.enum(["active", "inactive"]).default("active"),
 });
 
@@ -31,7 +32,6 @@ export const groupSchema = z.object({
   code: z.string().min(1, "Group code is required"),
   center: z.string().min(1, "Center is required"),
   branch: z.string().min(1, "Branch is required"),
-  leader: z.string().optional(),
   status: z.enum(["active", "inactive"]).default("active"),
 });
 
@@ -77,7 +77,8 @@ export const leaderSchema = z.object({
   lastName: z.string().min(1, "Last name is required"),
   phone: z.string().min(10, "Phone must be at least 10 digits"),
   email: z.string().email("Invalid email"),
-  group: z.string().min(1, "Group is required"),
+  center: z.string().min(1, "Center is required"),
+  group: z.string().optional(),
   status: z.enum(["active", "inactive"]).default("active"),
 });
 

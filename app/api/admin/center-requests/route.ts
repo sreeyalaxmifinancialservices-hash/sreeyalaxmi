@@ -72,28 +72,25 @@ export async function POST(req: NextRequest) {
           const newCenter = await Center.findOne({ name: req.newCenterName, branch: req.branch }).lean();
           if (newCenter) centerId = newCenter._id;
         }
-        if (centerId && req.groupName) {
-          const group = await Group.findOne({ center: centerId, name: req.groupName }).lean();
-          if (group) {
-            const existingLeader = await Leader.findOne({ group: group._id }).lean();
-            if (!existingLeader) {
-              const leaderCount = await Leader.countDocuments();
-              const leaderId = `LD${String(leaderCount + created + 1).padStart(6, "0")}`;
-              const nameParts = (req.leaderName || "").trim().split(/\s+/);
-              const firstName = nameParts[0] || req.leaderName;
-              const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "-";
-              const leader = await Leader.create({
-                leaderId,
-                firstName,
-                lastName,
-                phone: req.leaderPhone || "-",
-                email: req.leaderEmail || "-",
-                group: group._id,
-                status: "active",
-              });
-              await Group.findByIdAndUpdate(group._id, { leader: leader._id });
-              created++;
-            }
+        if (centerId) {
+          const existingLeader = await Leader.findOne({ center: centerId }).lean();
+          if (!existingLeader) {
+            const leaderCount = await Leader.countDocuments();
+            const leaderId = `LD${String(leaderCount + created + 1).padStart(6, "0")}`;
+            const nameParts = (req.leaderName || "").trim().split(/\s+/);
+            const firstName = nameParts[0] || req.leaderName;
+            const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "-";
+            const leader = await Leader.create({
+              leaderId,
+              firstName,
+              lastName,
+              phone: req.leaderPhone || "-",
+              email: req.leaderEmail || "-",
+              center: centerId,
+              status: "active",
+            });
+            await Center.findByIdAndUpdate(centerId, { leader: leader._id });
+            created++;
           }
         }
       }
@@ -222,22 +219,20 @@ export async function PUT(req: NextRequest) {
           staff: request.staff,
         });
 
-        let groupId = request.center;
         if (request.addGroup && request.groupName) {
           const groupCount = await Group.countDocuments();
           const code = request.groupCode || `GRP${String(groupCount + 1).padStart(5, "0")}`;
-          const group = await Group.create({
+          await Group.create({
             name: request.groupName,
             code,
             center: request.center,
             branch: request.branch,
             status: "active",
           });
-          groupId = group._id;
         }
 
         if (request.leaderName) {
-          const existingLeader = await Leader.findOne({ group: groupId }).lean();
+          const existingLeader = await Leader.findOne({ center: request.center }).lean();
           if (!existingLeader) {
             const leaderCount = await Leader.countDocuments();
             const leaderId = `LD${String(leaderCount + 1).padStart(6, "0")}`;
@@ -250,10 +245,10 @@ export async function PUT(req: NextRequest) {
               lastName,
               phone: request.leaderPhone || "-",
               email: request.leaderEmail || "-",
-              group: groupId,
+              center: request.center,
               status: "active",
             });
-            await Group.findByIdAndUpdate(groupId, { leader: leader._id });
+            await Center.findByIdAndUpdate(request.center, { leader: leader._id });
           }
         }
       }
@@ -277,22 +272,20 @@ export async function PUT(req: NextRequest) {
           $push: { assignedCenters: newCenter._id },
         });
 
-        let groupId = newCenter._id;
         if (request.addGroup && request.groupName) {
           const groupCount = await Group.countDocuments();
           const code = request.groupCode || `GRP${String(groupCount + 1).padStart(5, "0")}`;
-          const group = await Group.create({
+          await Group.create({
             name: request.groupName,
             code,
             center: newCenter._id,
             branch: request.branch,
             status: "active",
           });
-          groupId = group._id;
         }
 
         if (request.leaderName) {
-          const existingLeader = await Leader.findOne({ group: groupId }).lean();
+          const existingLeader = await Leader.findOne({ center: newCenter._id }).lean();
           if (!existingLeader) {
             const leaderCount = await Leader.countDocuments();
             const leaderId = `LD${String(leaderCount + 1).padStart(6, "0")}`;
@@ -305,10 +298,10 @@ export async function PUT(req: NextRequest) {
               lastName,
               phone: request.leaderPhone || "-",
               email: request.leaderEmail || "-",
-              group: groupId,
+              center: newCenter._id,
               status: "active",
             });
-            await Group.findByIdAndUpdate(groupId, { leader: leader._id });
+            await Center.findByIdAndUpdate(newCenter._id, { leader: leader._id });
           }
         }
       }

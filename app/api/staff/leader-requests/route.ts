@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import Inquiry from "@/lib/models/Inquiry";
 import Leader from "@/lib/models/Leader";
+import Center from "@/lib/models/Center";
 import Group from "@/lib/models/Group";
 
 export async function GET(req: NextRequest) {
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
 
     const [requests, total] = await Promise.all([
       Inquiry.find(filter)
-        .populate("leaderRequest.leaderId", "firstName lastName phone group")
+        .populate("leaderRequest.leaderId", "firstName lastName phone center group")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -78,15 +79,15 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      if (!leaderData.firstName || !leaderData.group) {
+      if (!leaderData.firstName || !leaderData.center) {
         return NextResponse.json(
-          { success: false, error: "Leader first name and group are required" },
+          { success: false, error: "Leader first name and center are required" },
           { status: 400 }
         );
       }
 
-      const group = await Group.findById(leaderData.group).lean();
-      if (!group) return NextResponse.json({ success: false, error: "Group not found" }, { status: 404 });
+      const center = await Center.findById(leaderData.center).lean();
+      if (!center) return NextResponse.json({ success: false, error: "Center not found" }, { status: 404 });
 
       const inquiryCount = await Inquiry.countDocuments();
       const inquiryNumber = `INQ${String(inquiryCount + 1).padStart(6, "0")}`;
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest) {
       const inquiry = await Inquiry.create({
         inquiryNumber,
         type: "leader_add",
-        branch: group.branch,
+        branch: center.branch,
         submittedBy: user._id,
         status: "pending",
         leaderRequest: {
@@ -104,7 +105,7 @@ export async function POST(req: NextRequest) {
             lastName: leaderData.lastName || "",
             phone: leaderData.phone || "",
             email: leaderData.email || "",
-            group: leaderData.group,
+            center: leaderData.center,
           },
           leaderName: leaderData.firstName,
         },
@@ -113,7 +114,7 @@ export async function POST(req: NextRequest) {
             action: `Leader add request submitted: ${leaderData.firstName}`,
             performedBy: user._id,
             date: new Date(),
-            remarks: `New leader for ${group.name}`,
+            remarks: `New leader for ${center.name}`,
           },
         ],
       });
@@ -156,10 +157,15 @@ export async function POST(req: NextRequest) {
       const inquiryCount = await Inquiry.countDocuments();
       const inquiryNumber = `INQ${String(inquiryCount + 1).padStart(6, "0")}`;
 
+      const branchForEdit = leader.center
+        ? (await Center.findById(leader.center).lean())?.branch
+        : leader.group
+          ? (await Group.findById(leader.group).lean())?.branch
+          : undefined;
       const inquiry = await Inquiry.create({
         inquiryNumber,
         type: "leader_edit",
-        branch: leader.group ? (await Group.findById(leader.group).lean())?.branch : undefined,
+        branch: branchForEdit,
         submittedBy: user._id,
         status: "pending",
         leaderRequest: {
@@ -196,13 +202,18 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: "Leader not found" }, { status: 404 });
       }
 
+      const branchForDelete = leader.center
+        ? (await Center.findById(leader.center).lean())?.branch
+        : leader.group
+          ? (await Group.findById(leader.group).lean())?.branch
+          : undefined;
       const inquiryCount = await Inquiry.countDocuments();
       const inquiryNumber = `INQ${String(inquiryCount + 1).padStart(6, "0")}`;
 
       const inquiry = await Inquiry.create({
         inquiryNumber,
         type: "leader_delete",
-        branch: leader.group ? (await Group.findById(leader.group).lean())?.branch : undefined,
+        branch: branchForDelete,
         submittedBy: user._id,
         status: "pending",
         leaderRequest: {

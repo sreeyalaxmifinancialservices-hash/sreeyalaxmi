@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Leader from "@/lib/models/Leader";
+import Center from "@/lib/models/Center";
 import { connectDB } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { leaderSchema } from "@/lib/validations";
@@ -11,6 +12,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const { id } = await params;
     const leader = await Leader.findById(id)
+      .populate("center", "name code")
       .populate("group", "name code")
       .lean();
 
@@ -53,14 +55,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       );
     }
 
-    const leader = await Leader.findByIdAndUpdate(id, parsed.data, { new: true }).lean();
-
-    if (!leader) {
+    const existingLeader = await Leader.findById(id).lean();
+    if (!existingLeader) {
       return NextResponse.json(
         { success: false, error: "Leader not found" },
         { status: 404 }
       );
     }
+
+    // Handle center reassignment: clear old center's leader, set new center's leader
+    if (parsed.data.center && String(parsed.data.center) !== String(existingLeader.center)) {
+      if (existingLeader.center) {
+        await Center.findByIdAndUpdate(existingLeader.center, { $unset: { leader: "" } });
+      }
+      await Center.findByIdAndUpdate(parsed.data.center, { leader: id });
+    }
+
+    const leader = await Leader.findByIdAndUpdate(id, parsed.data, { new: true }).lean();
 
     return NextResponse.json({ success: true, data: leader, message: "Leader updated successfully" });
   } catch (error: any) {
@@ -84,6 +95,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await requireRole(["admin"]);
 
     const { id } = await params;
+    const leaderDoc = await Leader.findById(id).lean();
+    if (leaderDoc?.center) {
+      await Center.findByIdAndUpdate(leaderDoc.center, { $unset: { leader: "" } });
+    }
     const leader = await Leader.findByIdAndUpdate(
       id,
       { status: "inactive" },

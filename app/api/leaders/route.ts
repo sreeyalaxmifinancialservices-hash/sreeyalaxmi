@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Leader from "@/lib/models/Leader";
-import Group from "@/lib/models/Group";
+import Center from "@/lib/models/Center";
 import { connectDB } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { leaderSchema } from "@/lib/validations";
@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search") || "";
     const group = searchParams.get("group");
+    const center = searchParams.get("center");
     const status = searchParams.get("status");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
@@ -28,11 +29,13 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    if (group) filter.group = group;
+    if (center) filter.center = center;
+    else if (group) filter.group = group;
     if (status) filter.status = status;
 
     const [leaders, total] = await Promise.all([
       Leader.find(filter)
+        .populate("center", "name code")
         .populate("group", "name code")
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -89,7 +92,7 @@ export async function POST(req: NextRequest) {
 
     const leader = await Leader.create(parsed.data);
 
-    await Group.findByIdAndUpdate(parsed.data.group, { leader: leader._id });
+    await Center.findByIdAndUpdate(parsed.data.center, { leader: leader._id });
 
     return NextResponse.json(
       { success: true, data: leader, message: "Leader created successfully" },

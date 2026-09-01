@@ -17,24 +17,21 @@ import { toast } from "sonner"
 
 interface Branch { _id: string; name: string; code: string }
 interface Center { _id: string; name: string; code: string }
-interface Leader { _id: string; firstName: string; lastName: string }
-interface MemberItem { _id: string; firstName: string; lastName: string; memberCode: string }
 interface Group {
   _id: string; name: string; code: string
-  center: Center; branch: Branch; leader?: Leader
+  center: Center; branch: Branch
   memberCount: number; status: "active" | "inactive"
 }
 interface Pagination { page: number; limit: number; total: number; pages: number }
 
 const emptyForm = {
-  name: "", code: "", center: "", branch: "", leader: "", status: "active" as "active" | "inactive",
+  name: "", code: "", center: "", branch: "", status: "active" as "active" | "inactive",
 }
 
 export default function GroupsPage() {
   const [groups, setGroups] = useState<Group[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
   const [centers, setCenters] = useState<Center[]>([])
-  const [groupMembers, setGroupMembers] = useState<MemberItem[]>([])
   const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 10, total: 0, pages: 0 })
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -67,14 +64,7 @@ export default function GroupsPage() {
     } catch {}
   }, [])
 
-  const fetchGroupMembers = useCallback(async (groupId?: string) => {
-    if (!groupId) { setGroupMembers([]); return }
-    try {
-      const res = await fetch(`/api/members?group=${groupId}&limit=100`)
-      const json = await res.json()
-      if (json.success) setGroupMembers(json.data)
-    } catch {}
-  }, [])
+
 
   const fetchGroups = useCallback(async (page = 1) => {
     setLoading(true)
@@ -121,7 +111,6 @@ export default function GroupsPage() {
         name: form.name, code: form.code, center: form.center,
         branch: form.branch, status: form.status,
       }
-      if (form.leader) payload.leader = form.leader
       const url = editing ? `/api/groups/${editing._id}` : "/api/groups"
       const method = editing ? "PUT" : "POST"
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
@@ -163,7 +152,6 @@ export default function GroupsPage() {
   const openCreate = () => {
     setEditing(null)
     setForm(emptyForm)
-    setGroupMembers([])
     setErrors({})
     setDialogOpen(true)
   }
@@ -174,12 +162,9 @@ export default function GroupsPage() {
       name: g.name, code: g.code,
       center: typeof g.center === "object" ? g.center._id : g.center,
       branch: typeof g.branch === "object" ? g.branch._id : g.branch,
-      leader: (g.leader as any)?.member || g.leader?._id || "",
       status: g.status,
     })
     setErrors({})
-    setGroupMembers([])
-    fetchGroupMembers(g._id)
     setDialogOpen(true)
   }
 
@@ -230,7 +215,6 @@ export default function GroupsPage() {
                         <TableHead>Code</TableHead>
                         <TableHead>Center</TableHead>
                         <TableHead>Branch</TableHead>
-                        <TableHead>Leader</TableHead>
                         <TableHead>Members</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
@@ -240,11 +224,11 @@ export default function GroupsPage() {
                       {loading ? (
                         Array.from({ length: 5 }).map((_, i) => (
                           <TableRow key={i}>
-                            {Array.from({ length: 8 }).map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>)}
+                            {Array.from({ length: 7 }).map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>)}
                           </TableRow>
                         ))
                       ) : groups.length === 0 ? (
-                        <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground">No groups found</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">No groups found</TableCell></TableRow>
                       ) : (
                         groups.map((g) => (
                           <TableRow key={g._id}>
@@ -252,7 +236,6 @@ export default function GroupsPage() {
                             <TableCell>{g.code}</TableCell>
                             <TableCell>{g.center?.name}</TableCell>
                             <TableCell>{g.branch?.name}</TableCell>
-                            <TableCell>{g.leader ? `${g.leader.firstName} ${g.leader.lastName}` : "-"}</TableCell>
                             <TableCell>{g.memberCount}</TableCell>
                             <TableCell><Badge variant={g.status === "active" ? "default" : "secondary"}>{g.status}</Badge></TableCell>
                             <TableCell className="text-right">
@@ -312,20 +295,7 @@ export default function GroupsPage() {
               </Select>
               {errors.center && <p className="text-sm text-destructive mt-1">{errors.center}</p>}
             </div>
-            <div>
-              <Label>Leader <span className="text-muted-foreground font-normal">(optional)</span></Label>
-              {editing ? (
-                <Select value={form.leader} onValueChange={(v) => setForm({ ...form, leader: v === "__none__" ? "" : (v ?? "") })} items={[{ label: "No leader", value: "__none__" }, ...groupMembers.map(m => ({ label: `${m.firstName} ${m.lastName}`, value: m._id }))]}>
-                  <SelectTrigger><SelectValue placeholder="Select leader from group members" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">No leader</SelectItem>
-                    {groupMembers.map((m) => <SelectItem key={m._id} value={m._id}>{m.firstName} {m.lastName}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Input value="Add members to the group first, then assign a leader from them later." readOnly disabled />
-              )}
-            </div>
+
             <div>
               <Label>Status</Label>
               <Select value={form.status} onValueChange={(v) => { if (v === "active" || v === "inactive") setForm({ ...form, status: v }) }} items={[{ label: "Active", value: "active" }, { label: "Inactive", value: "inactive" }]}>

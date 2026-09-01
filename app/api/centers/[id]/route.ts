@@ -15,6 +15,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const center = await Center.findById(id)
       .populate("branch", "name code")
       .populate("staff", "firstName lastName phone")
+      .populate("leader", "firstName lastName phone email member")
       .lean();
 
     if (!center) {
@@ -56,7 +57,70 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       );
     }
 
-    const center = await Center.findByIdAndUpdate(id, parsed.data, { new: true }).lean();
+    const updateData: Record<string, any> = { ...parsed.data };
+    const newLeaderVal = updateData.leader;
+    delete updateData.leader;
+
+    const existingCenter = await Center.findById(id).lean();
+    if (!existingCenter) {
+      return NextResponse.json(
+        { success: false, error: "Center not found" },
+        { status: 404 }
+      );
+    }
+
+    // Handle leader reassignment for center
+    if (newLeaderVal !== undefined) {
+      const Leader = (await import("@/lib/models/Leader")).default;
+      const Member = (await import("@/lib/models/Member")).default;
+
+      // Determine new leaderId (could be empty string for clearing)
+      let newLeaderId: any = null;
+      if (newLeaderVal) {
+        const existingLeader = await Leader.findById(newLeaderVal).lean();
+        if (existingLeader) {
+          newLeaderId = existingLeader._id;
+        } else {
+          const member = await Member.findById(newLeaderVal).lean();
+          if (member) {
+            const existingForMember = await Leader.findOne({ member: member._id }).lean();
+            if (existingForMember) {
+              newLeaderId = existingForMember._id;
+              await Leader.findByIdAndUpdate(newLeaderId, { center: id });
+            } else {
+              const leaderCount = await Leader.countDocuments();
+              const newLeader = await Leader.create({
+                leaderId: `LD${String(leaderCount + 1).padStart(6, "0")}`,
+                firstName: member.firstName,
+                lastName: member.lastName,
+                phone: member.phone,
+                email: member.email || `${member.memberCode}@member.local`,
+                center: id,
+                member: member._id,
+                status: "active",
+              });
+              newLeaderId = newLeader._id;
+            }
+          }
+        }
+      }
+
+      const oldLeaderId = (existingCenter as any).leader;
+      if (String(oldLeaderId || "") !== String(newLeaderId || "")) {
+        if (oldLeaderId && !newLeaderId) {
+          // clearing leader: optionally keep leader but unset center?
+          await Leader.findByIdAndUpdate(oldLeaderId, { $unset: { center: "" } });
+        } else if (newLeaderId) {
+          if (oldLeaderId) {
+            await Leader.findByIdAndUpdate(oldLeaderId, { $unset: { center: "" } });
+          }
+          await Leader.findByIdAndUpdate(newLeaderId, { center: id });
+        }
+      }
+      (updateData as any).leader = newLeaderId || null;
+    }
+
+    const center = await Center.findByIdAndUpdate(id, updateData, { new: true }).lean();
 
     if (!center) {
       return NextResponse.json(
