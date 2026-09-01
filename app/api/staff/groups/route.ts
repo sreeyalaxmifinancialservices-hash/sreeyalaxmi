@@ -40,7 +40,8 @@ export async function GET(req: NextRequest) {
         .populate("center", "name code")
         .populate("branch", "name code")
         .populate("leader", "firstName lastName phone")
-        .sort({ createdAt: -1 })
+        .collation({ locale: "en", numericOrdering: true })
+        .sort({ name: 1 })
         .skip(skip)
         .limit(limit)
         .lean(),
