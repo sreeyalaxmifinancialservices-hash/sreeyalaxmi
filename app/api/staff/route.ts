@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db";
 import Staff from "@/lib/models/Staff";
 import Branch from "@/lib/models/Branch";
 import User from "@/lib/models/User";
+import Group from "@/lib/models/Group";
 
 export async function GET(req: NextRequest) {
   try {
@@ -88,6 +89,13 @@ export async function POST(req: NextRequest) {
       isActive: true,
     });
 
+    // Auto-derive groups from centers: all groups under selected centers are auto-assigned
+    let derivedGroups: string[] = [];
+    if (assignedCenters && assignedCenters.length > 0) {
+      const groups = await Group.find({ center: { $in: assignedCenters } }).select("_id").lean();
+      derivedGroups = groups.map((g: any) => String(g._id));
+    }
+
     const staff = await Staff.create({
       user: user._id,
       employeeId,
@@ -99,7 +107,7 @@ export async function POST(req: NextRequest) {
       branches,
       designation,
       assignedCenters: assignedCenters || [],
-      assignedGroups: assignedGroups || [],
+      assignedGroups: derivedGroups,
       status: status || "active",
     });
 

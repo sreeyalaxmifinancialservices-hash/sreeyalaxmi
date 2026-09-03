@@ -3,6 +3,7 @@ import Staff from "@/lib/models/Staff";
 import Branch from "@/lib/models/Branch";
 import User from "@/lib/models/User";
 import Center from "@/lib/models/Center";
+import Group from "@/lib/models/Group";
 import { connectDB } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { staffSchema } from "@/lib/validations";
@@ -63,6 +64,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const updateData: Record<string, unknown> = { ...parsed.data };
     if (photo !== undefined) {
       updateData.photo = photo || undefined;
+    }
+
+    // If centers are updated, auto-derive groups for that center
+    if (parsed.data.assignedCenters) {
+      const centers = parsed.data.assignedCenters as string[];
+      if (centers.length > 0) {
+        const groups = await Group.find({ center: { $in: centers } }).select("_id").lean();
+        updateData.assignedGroups = groups.map((g: any) => String(g._id));
+      } else {
+        updateData.assignedGroups = [];
+      }
     }
 
     const staff = await Staff.findByIdAndUpdate(id, updateData, { new: true }).lean();

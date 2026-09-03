@@ -47,7 +47,7 @@ export function BalanceDistributionCard() {
   React.useEffect(() => {
     Promise.all([
       fetch("/api/collections?limit=99999").then(r => r.json()),
-      fetch("/api/group-assigned-collection").then(r => r.json()),
+      fetch("/api/center-assigned-collection").then(r => r.json()),
     ])
       .then(([collectionsRes, groupRes]) => {
         const branchMap = new Map<string, number>();

@@ -126,11 +126,13 @@ export default function StaffPage() {
           arr.findIndex(x => x._id === g._id) === i
         )
         setGroups(unique)
+        // Auto-assign all groups under selected centers
+        setForm(f => ({ ...f, assignedGroups: unique.map((g: { _id: string }) => g._id) }))
       })
     } else {
       setGroups([])
+      setForm(f => ({ ...f, assignedGroups: [] }))
     }
-    setForm(f => ({ ...f, assignedGroups: f.assignedGroups.filter(gId => groups.some(g => g._id === gId)) }))
   }, [form.assignedCenters])
 
   const uploadImage = async (file: File): Promise<string | null> => {
@@ -571,28 +573,23 @@ export default function StaffPage() {
             )}
             {form.assignedCenters.length > 0 && groups.length > 0 && (
               <div className="space-y-2">
-                <Label>Assigned Groups</Label>
-                <p className="text-xs text-muted-foreground">Select the groups this staff member will manage</p>
-                <div className="max-h-[200px] overflow-y-auto rounded-md border p-3 space-y-2">
+                <Label>Assigned Groups (auto-assigned)</Label>
+                <p className="text-xs text-muted-foreground">All groups under selected centers are automatically assigned</p>
+                <div className="max-h-[200px] overflow-y-auto rounded-md border p-3 space-y-2 bg-muted/20">
                   {groups.map(g => (
-                    <label key={g._id} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={form.assignedGroups.includes(g._id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setForm({ ...form, assignedGroups: [...form.assignedGroups, g._id] })
-                          } else {
-                            setForm({ ...form, assignedGroups: form.assignedGroups.filter(id => id !== g._id) })
-                          }
-                        }}
-                        className="rounded border-gray-300"
-                      />
-                      <span className="text-sm">{g.name} ({g.code})</span>
-                    </label>
+                    <div key={g._id} className="flex items-center gap-2 text-sm">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                      {g.name} ({g.code})
+                    </div>
                   ))}
                 </div>
-                <p className="text-xs text-muted-foreground">{form.assignedGroups.length} group(s) selected</p>
+                <p className="text-xs text-muted-foreground">{groups.length} group(s) will be assigned automatically</p>
+              </div>
+            )}
+            {form.assignedCenters.length > 0 && groups.length === 0 && (
+              <div className="space-y-2">
+                <Label>Assigned Groups (auto-assigned)</Label>
+                <p className="text-sm text-muted-foreground border rounded-md p-3">No groups found under selected centers</p>
               </div>
             )}
           </div>

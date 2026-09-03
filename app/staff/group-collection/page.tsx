@@ -73,7 +73,8 @@ export default function StaffGroupCollectionPage() {
   const fetchAssignments = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/staff/group-assigned-collection");
+      let res = await fetch("/api/staff/center-assigned-collection");
+      if (!res.ok) res = await fetch("/api/staff/group-assigned-collection");
       if (res.ok) {
         const data = await res.json();
         setAssignments(data.data || []);
@@ -110,7 +111,7 @@ export default function StaffGroupCollectionPage() {
         };
       });
 
-      const res = await fetch(`/api/staff/group-assigned-collection/${selected._id}`, {
+      const res = await fetch(`/api/staff/center-assigned-collection/${selected._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ members }),
@@ -135,10 +136,10 @@ export default function StaffGroupCollectionPage() {
         <div className="flex-1 p-6">
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-              Group Collections
+              Center Collections
             </h1>
             <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-              View assigned group collections and submit payments.
+              View assigned center collections (all groups & members) and submit payments.
             </p>
           </div>
 
@@ -163,7 +164,7 @@ export default function StaffGroupCollectionPage() {
                 ) : assignments.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-10 text-center text-sm text-neutral-500">
-                      No group assignments found.
+                      No center assignments found.
                     </td>
                   </tr>
                 ) : assignments.map((a) => (

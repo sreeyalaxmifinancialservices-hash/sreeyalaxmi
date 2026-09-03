@@ -138,7 +138,7 @@ export function TransactionsOverviewCard() {
   useEffect(() => {
     Promise.all([
       fetch("/api/collections?limit=99999", { credentials: "include" }).then(r => r.json()),
-      fetch("/api/group-assigned-collection", { credentials: "include" }).then(r => r.json()),
+      fetch("/api/center-assigned-collection", { credentials: "include" }).then(r => r.json()),
     ])
       .then(([collectionsRes, groupRes]) => {
         const collectionRecords: CollectionRecord[] = collectionsRes.success ? collectionsRes.data : [];

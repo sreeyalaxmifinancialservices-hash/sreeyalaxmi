@@ -29,7 +29,7 @@ export function useNotificationCounts(role: "admin" | "staff") {
           fetch("/api/admin/center-requests?status=pending&limit=1").then((r) => r.json()),
           fetch("/api/members?verificationStatus=pending&limit=1").then((r) => r.json()),
           fetch("/api/loans?status=pending&limit=1").then((r) => r.json()),
-          fetch("/api/group-assigned-collection?status=Pending%20Review&limit=1").then((r) => r.json()),
+          fetch("/api/center-assigned-collection?status=Pending%20Review&limit=1").then((r) => r.json()),
         ])
         setCounts({
           pendingInquiries: inquiriesRes.pagination?.total || 0,
@@ -45,7 +45,7 @@ export function useNotificationCounts(role: "admin" | "staff") {
           fetch("/api/staff/edit-requests?status=pending&limit=1").then((r) => r.json()),
           fetch("/api/members?verificationStatus=pending&limit=1").then((r) => r.json()),
           fetch("/api/staff/loans?status=pending&limit=1").then((r) => r.json()),
-          fetch("/api/staff/group-assigned-collection?status=Pending&limit=1").then((r) => r.json()),
+          fetch("/api/staff/center-assigned-collection?status=Pending&limit=1").then((r) => r.json()),
         ])
         setCounts({
           pendingInquiries: 0,

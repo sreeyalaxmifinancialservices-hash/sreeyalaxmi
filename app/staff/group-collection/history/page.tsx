@@ -64,7 +64,7 @@ export default function StaffCollectionHistoryPage() {
   const fetchHistory = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/staff/group-assigned-collection");
+      const res = await fetch("/api/staff/center-assigned-collection");
       if (res.ok) {
         const data = await res.json();
         setAssignments(data.data || []);

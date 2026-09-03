@@ -39,7 +39,23 @@ import {
 import { useNotificationCounts } from "@/hooks/use-notification-counts"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const [user, setUser] = React.useState({ name: "Admin", email: "admin@gmail.com", avatar: "/avatars/shadcn.svg" })
   const counts = useNotificationCounts("admin")
+
+  React.useEffect(() => {
+    fetch("/api/auth/me")
+      .then((res) => res.json())
+      .then((res) => {
+        if (res.success && res.user) {
+          setUser({
+            name: res.user.name || "Admin",
+            email: res.user.email || "admin@gmail.com",
+            avatar: "/avatars/shadcn.svg",
+          })
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   const navMain = [
     { title: "Dashboard", url: "/admin/dashboard", icon: <LayoutDashboardIcon /> },
@@ -56,7 +72,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     { title: "Loans", url: "/admin/loans", icon: <CreditCardIcon />, badge: counts.pendingLoans },
     { title: "Repayments", url: "/admin/repayments", icon: <ScrollTextIcon /> },
     { title: "Collections", url: "/admin/collections", icon: <ClipboardListIcon /> },
-    { title: "Group Assignments", url: "/admin/group-assigned-collection", icon: <ClipboardListIcon />, badge: counts.pendingGroupAssignments },
+    { title: "Center Assignments", url: "/admin/center-assigned-collection", icon: <ClipboardListIcon />, badge: counts.pendingGroupAssignments },
     { title: "Member & Loan Search", url: "/admin/member-search", icon: <SearchIcon /> },
   ]
 
@@ -87,7 +103,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={{ name: "Admin", email: "admin@gmail.com", avatar: "/avatars/shadcn.svg" }} />
+        <NavUser user={user} />
       </SidebarFooter>
     </Sidebar>
   )

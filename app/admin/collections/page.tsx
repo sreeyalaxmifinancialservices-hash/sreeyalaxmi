@@ -103,7 +103,7 @@ export default function CollectionsPage() {
   const loadMerged = React.useCallback(async (): Promise<Collection[]> => {
     const [colRes, groupRes] = await Promise.all([
       fetch("/api/collections?limit=1000").then((r) => r.json()),
-      fetch("/api/group-assigned-collection").then((r) => r.json()),
+      fetch("/api/center-assigned-collection").then((r) => r.json()),
     ])
     const reports: Collection[] = colRes.success ? colRes.data : []
     const groups: GroupCollection[] = groupRes.success
