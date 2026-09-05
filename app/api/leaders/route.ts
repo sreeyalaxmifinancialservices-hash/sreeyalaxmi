@@ -90,9 +90,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const leader = await Leader.create(parsed.data);
+    // Strip empty-string optional refs (e.g. group: "" when no group selected) before Mongoose cast
+    const createData: Record<string, any> = { ...parsed.data };
+    for (const key of Object.keys(createData)) {
+      if (createData[key] === "") delete createData[key];
+    }
 
-    await Center.findByIdAndUpdate(parsed.data.center, { leader: leader._id });
+    const leader = await Leader.create(createData);
+
+    await Center.findByIdAndUpdate(createData.center, { leader: leader._id });
 
     return NextResponse.json(
       { success: true, data: leader, message: "Leader created successfully" },

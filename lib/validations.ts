@@ -11,7 +11,7 @@ export const branchSchema = z.object({
   address: z.string().min(1, "Address is required"),
   phone: z.string().min(10, "Phone must be at least 10 digits"),
   email: z.string().email("Invalid email"),
-  manager: z.string().optional(),
+  manager: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
   status: z.enum(["active", "inactive"]).default("active"),
 });
 
@@ -22,8 +22,8 @@ export const centerSchema = z.object({
   meetingDay: z.string().min(1, "Meeting day is required"),
   meetingTime: z.string().min(1, "Meeting time is required"),
   location: z.string().min(1, "Location is required"),
-  staff: z.string().optional(),
-  leader: z.string().optional(),
+  staff: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  leader: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
   status: z.enum(["active", "inactive"]).default("active"),
 });
 
@@ -78,27 +78,27 @@ export const leaderSchema = z.object({
   phone: z.string().min(10, "Phone must be at least 10 digits"),
   email: z.string().email("Invalid email"),
   center: z.string().min(1, "Center is required"),
-  group: z.string().optional(),
+  group: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
   status: z.enum(["active", "inactive"]).default("active"),
 });
 
 export const loanSchema = z.object({
   loanType: z.enum(["group", "bank"]).default("group"),
   member: z.string().min(1, "Member is required"),
-  branch: z.string().optional(),
-  center: z.string().optional(),
-  group: z.string().optional(),
+  branch: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  center: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  group: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
   loanAmount: z.number().min(1, "Loan amount is required"),
   insuranceAmount: z.number().min(0).default(0),
   processingFee: z.number().min(0).default(0),
   loanFees: z.number().min(0).default(0),
   noOfWeeks: z.number().min(1, "Number of weeks is required").default(50),
   cycleNumber: z.number().min(1).default(1),
-  leader: z.string().optional(),
-  reason: z.string().optional(),
-  remarks: z.string().optional(),
-  bankName: z.string().optional(),
-  bankBranchName: z.string().optional(),
+  leader: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  reason: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  remarks: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  bankName: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  bankBranchName: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
 }).refine(
   (data) => {
     if (data.loanType === "group") {

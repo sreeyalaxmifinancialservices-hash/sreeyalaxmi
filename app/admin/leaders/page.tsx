@@ -103,7 +103,10 @@ export default function LeadersPage() {
     if (!validate()) return
     setSubmitting(true)
     try {
-      const payload = { ...form }
+      const payload: Record<string, any> = { ...form }
+      // Don't send empty optional refs - they cause CastError: Cast to ObjectId failed for value ""
+      if (!payload.group) delete payload.group
+      if (!payload.memberId) delete payload.memberId
       const url = editing ? `/api/leaders/${editing._id}` : "/api/leaders"
       const method = editing ? "PUT" : "POST"
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
@@ -156,7 +159,7 @@ export default function LeadersPage() {
       leaderId: l.leaderId, firstName: l.firstName, lastName: l.lastName,
       phone: l.phone, email: l.email,
       center: typeof l.center === "object" ? (l.center as any)._id : (l.center as any),
-      group: "",
+      group: typeof l.group === "object" ? ((l.group as any)?._id || "") : ((l.group as any) || ""),
       memberId: "",
       status: l.status,
     })

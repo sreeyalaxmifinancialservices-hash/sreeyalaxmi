@@ -63,15 +63,22 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       );
     }
 
+    // Sanitize empty-string ObjectId fields (e.g. `group: ""` from edit form) -
+    // Zod preprocess handles most cases, but defensively strip any remaining "" before Mongoose cast
+    const updateData: Record<string, any> = { ...parsed.data };
+    for (const key of Object.keys(updateData)) {
+      if (updateData[key] === "") delete updateData[key];
+    }
+
     // Handle center reassignment: clear old center's leader, set new center's leader
-    if (parsed.data.center && String(parsed.data.center) !== String(existingLeader.center)) {
+    if (updateData.center && String(updateData.center) !== String(existingLeader.center)) {
       if (existingLeader.center) {
         await Center.findByIdAndUpdate(existingLeader.center, { $unset: { leader: "" } });
       }
-      await Center.findByIdAndUpdate(parsed.data.center, { leader: id });
+      await Center.findByIdAndUpdate(updateData.center, { leader: id });
     }
 
-    const leader = await Leader.findByIdAndUpdate(id, parsed.data, { new: true }).lean();
+    const leader = await Leader.findByIdAndUpdate(id, updateData, { returnDocument: "after", runValidators: true }).lean();
 
     return NextResponse.json({ success: true, data: leader, message: "Leader updated successfully" });
   } catch (error: any) {
