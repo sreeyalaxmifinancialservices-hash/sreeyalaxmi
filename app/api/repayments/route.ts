@@ -89,15 +89,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (parsed.data.principal > loan.outstandingBalance) {
+    const principalNum = Number(parsed.data.principal)
+    const advanceNum = Number(parsed.data.advanceAmount || 0)
+    if (principalNum <= 0) {
+      return NextResponse.json({ success: false, error: "Principal amount must be greater than 0" }, { status: 400 })
+    }
+    if (advanceNum < 0) {
+      return NextResponse.json({ success: false, error: "Advance amount cannot be negative" }, { status: 400 })
+    }
+    const totalPay = principalNum + advanceNum
+    if (totalPay > loan.outstandingBalance) {
       return NextResponse.json(
-        { success: false, error: "Payment amount exceeds outstanding balance" },
+        { success: false, error: `Total (principal + advance = ₹${totalPay.toLocaleString()}) exceeds outstanding ₹${loan.outstandingBalance.toLocaleString()}` },
         { status: 400 }
       );
     }
 
-    const newOutstanding = loan.outstandingBalance - parsed.data.principal;
-    const newPrincipalOS = loan.principalOutstanding - parsed.data.principal;
+    const newOutstanding = loan.outstandingBalance - totalPay;
+    const newPrincipalOS = (loan.principalOutstanding ?? loan.outstandingBalance) - totalPay;
     const installmentNumber = loan.installmentsPaid + 1;
 
     const repaymentCount = await Repayment.countDocuments();
@@ -108,8 +117,8 @@ export async function POST(req: NextRequest) {
       (paymentDate.getTime() - (loan.disbursementDate ? new Date(loan.disbursementDate).getTime() : paymentDate.getTime())) / (7 * 24 * 60 * 60 * 1000)
     );
 
-    const total = parsed.data.principal + parsed.data.sbSavings + parsed.data.insuranceAmount + parsed.data.sd + parsed.data.loanFees;
-    const collectionAmount = parsed.data.principal + parsed.data.sbSavings;
+    const total = principalNum + advanceNum + parsed.data.sbSavings + parsed.data.insuranceAmount + parsed.data.sd + parsed.data.loanFees;
+    const collectionAmount = principalNum;
 
     const repayment = await Repayment.create({
       repaymentId,
@@ -140,12 +149,20 @@ export async function POST(req: NextRequest) {
       status: "completed",
     });
 
-    await Loan.findByIdAndUpdate(parsed.data.loan, {
+    const isClosing = newOutstanding <= 0
+    const loanUpdate: Record<string, any> = {
       outstandingBalance: Math.round(newOutstanding * 100) / 100,
       principalOutstanding: Math.max(0, Math.round(newPrincipalOS * 100) / 100),
       installmentsPaid: installmentNumber,
-      status: newOutstanding <= 0 ? "closed" : loan.status,
-    });
+      status: isClosing ? "closed" : loan.status,
+    }
+    if (isClosing) {
+      loanUpdate.closedAt = paymentDate
+      loanUpdate.closedBy = user.id
+      loanUpdate.closureRemark = parsed.data.remarks || "Auto-closed on full repayment"
+      loanUpdate.preCloseDate = paymentDate
+    }
+    await Loan.findByIdAndUpdate(parsed.data.loan, loanUpdate);
 
     return NextResponse.json(
       { success: true, data: repayment, message: "Repayment recorded successfully" },

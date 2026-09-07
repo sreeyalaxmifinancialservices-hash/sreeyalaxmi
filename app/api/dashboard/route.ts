@@ -47,6 +47,8 @@ export async function GET() {
       todayGroupCollectionData,
       weeklyGroupCollectionData,
       totalGroupCollectionData,
+      closedLoansCount,
+      closedLoansAmountData,
     ] = await Promise.all([
       Member.countDocuments({ status: "active" }),
       Loan.countDocuments({ status: { $in: ["disbursed", "active"] } }),
@@ -112,6 +114,11 @@ export async function GET() {
         { $match: { status: { $in: ["Complete", "Partial"] } } },
         { $group: { _id: null, total: { $sum: "$totalCollected" } } },
       ]),
+      Loan.countDocuments({ status: "closed" }),
+      Loan.aggregate([
+        { $match: { status: "closed" } },
+        { $group: { _id: null, total: { $sum: "$loanAmount" } } },
+      ]),
     ]);
 
     const thisWeekTotal = weeklyCollectionData[0]?.total || 0;
@@ -129,6 +136,8 @@ export async function GET() {
       weeklyGrowth: Math.round(weeklyGrowth * 100) / 100,
       totalCollection: (totalCollectionData[0]?.total || 0) + (totalGroupCollectionData[0]?.total || 0),
       outstandingLoans: outstandingLoansData[0]?.total || 0,
+      closedLoansCount: closedLoansCount || 0,
+      closedLoansAmount: closedLoansAmountData[0]?.total || 0,
       branchCount,
       centerCount,
       pendingVerification,

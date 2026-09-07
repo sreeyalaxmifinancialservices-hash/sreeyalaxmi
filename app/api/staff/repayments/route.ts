@@ -157,11 +157,23 @@ export async function POST(req: NextRequest) {
       status: "completed",
     });
 
-    await Loan.findByIdAndUpdate(loanId, {
-      $inc: { installmentsPaid: 1 },
+    const isClosing = newOutstanding <= 0
+    const staffLoanUpdate: Record<string, any> = {
       outstandingBalance: newOutstanding > 0 ? newOutstanding : 0,
-      status: newOutstanding <= 0 ? "closed" : loan.status,
-    });
+      status: isClosing ? "closed" : loan.status,
+    }
+    if (isClosing) {
+      const closeDate = paymentDate ? new Date(paymentDate) : new Date()
+      staffLoanUpdate.closedAt = closeDate
+      staffLoanUpdate.closedBy = user._id
+      staffLoanUpdate.closureRemark = remarks || "Auto-closed on full repayment"
+      staffLoanUpdate.preCloseDate = closeDate
+      staffLoanUpdate.principalOutstanding = 0
+    } else {
+      // keep principalOutstanding in sync if needed
+      // outstandingBalance already set
+    }
+    await Loan.findByIdAndUpdate(loanId, { $inc: { installmentsPaid: 1 }, ...staffLoanUpdate });
 
     return NextResponse.json(
       { success: true, data: repayment, message: "Repayment recorded successfully" },

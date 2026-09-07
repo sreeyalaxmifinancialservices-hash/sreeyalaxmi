@@ -14,6 +14,8 @@ export function OverviewKpis() {
   const [totalBranches, setTotalBranches] = useState(0);
   const [totalCenters, setTotalCenters] = useState(0);
   const [pendingVerifications, setPendingVerifications] = useState(0);
+  const [closedLoansCount, setClosedLoansCount] = useState(0);
+  const [closedLoansAmount, setClosedLoansAmount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const fetchDashboard = useCallback(async () => {
@@ -31,6 +33,8 @@ export function OverviewKpis() {
         setTotalBranches(d.branchCount ?? 0);
         setTotalCenters(d.centerCount ?? 0);
         setPendingVerifications(d.pendingVerification ?? 0);
+        setClosedLoansCount(d.closedLoansCount ?? 0);
+        setClosedLoansAmount(d.closedLoansAmount ?? 0);
       }
     } catch {
     } finally {
@@ -205,6 +209,41 @@ export function OverviewKpis() {
         </Card>
       </div>
     </div>
+    </div>
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+      <Card className="gap-5 overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
+        <CardHeader>
+          <CardTitle className="font-normal">Closed Loans</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-end justify-between">
+          <div className="flex flex-col gap-1">
+            <div className="font-heading text-3xl leading-none tracking-tight">
+              {loading ? "0" : closedLoansCount.toLocaleString("en-IN")}
+            </div>
+            <p className="text-muted-foreground text-xs">Total loans closed</p>
+          </div>
+          <Badge className="bg-slate-500/10 text-slate-700 dark:bg-slate-500/15 dark:text-slate-300 border border-slate-500/20">
+            Closed
+          </Badge>
+        </CardContent>
+      </Card>
+
+      <Card className="gap-5 overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
+        <CardHeader>
+          <CardTitle className="font-normal">Closed Loans Amount</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-end justify-between">
+          <div className="flex flex-col gap-1">
+            <div className="font-heading text-3xl leading-none tracking-tight">
+              {loading ? "₹0" : `₹${closedLoansAmount.toLocaleString("en-IN")}`}
+            </div>
+            <p className="text-muted-foreground text-xs">Total amount of closed loans</p>
+          </div>
+          <Badge className="bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300 border border-emerald-500/20">
+            {formatINR(closedLoansAmount)}
+          </Badge>
+        </CardContent>
+      </Card>
     </div>
     </>
   );

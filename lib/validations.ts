@@ -119,7 +119,7 @@ export const loanSchema = z.object({
 
 export const repaymentSchema = z.object({
   loan: z.string().min(1, "Loan is required"),
-  principal: z.number().min(0, "Principal amount is required"),
+  principal: z.number().min(1, "Principal amount must be greater than 0"),
   insuranceAmount: z.number().min(0).default(0),
   sd: z.number().min(0).default(0),
   sbSavings: z.number().min(0).default(0),
@@ -132,7 +132,11 @@ export const repaymentSchema = z.object({
   paymentMethod: z.enum(["cash", "online", "cheque"]).default("cash"),
   paymentDate: z.string().min(1, "Payment date is required"),
   remarks: z.string().optional(),
-});
+}).refine((data) => {
+  const d = new Date(data.paymentDate)
+  const today = new Date(); today.setHours(23,59,59,999)
+  return !isNaN(d.getTime()) && d <= today
+}, { message: "Payment date cannot be in the future", path: ["paymentDate"]});
 
 export const collectionSchema = z.object({
   staffName: z.string().min(1, "Staff name is required"),

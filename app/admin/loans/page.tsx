@@ -32,7 +32,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
-import { Plus, Search, Loader2, CheckCircle, Banknote, XCircle, Eye, FileSpreadsheet, FileText, History } from "lucide-react"
+import { Plus, Search, Loader2, CheckCircle, Banknote, XCircle, Eye, FileSpreadsheet, FileText, History, MessageSquarePlus } from "lucide-react"
 import { computeLoanBreakdown, LoanCalcConfig } from "@/lib/loan-calc"
 
 interface Loan {
@@ -60,6 +60,7 @@ interface Loan {
   status: string
   closureRemark?: string
   closedAt?: string
+  updatedAt?: string
   createdAt: string
   bankName?: string
   bankBranchName?: string
@@ -312,7 +313,8 @@ export default function LoansPage() {
 
   const openCloseDialog = (loan: Loan) => {
     setCloseLoan(loan)
-    setCloseRemark(loan.closureRemark || "")
+    const isAutoRemark = loan.closureRemark === "Auto-closed on full repayment"
+    setCloseRemark(isAutoRemark ? "" : loan.closureRemark || "")
     setCloseDialogOpen(true)
   }
 
@@ -546,6 +548,8 @@ export default function LoansPage() {
                           new Date(loan.closedAt).toLocaleDateString()
                         ) : loan.preCloseDate ? (
                           new Date(loan.preCloseDate).toLocaleDateString()
+                        ) : loan.status === "closed" && (loan as any).updatedAt ? (
+                          new Date((loan as any).updatedAt).toLocaleDateString()
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
@@ -585,7 +589,18 @@ export default function LoansPage() {
                               <XCircle className="h-4 w-4 text-red-600" />
                             </Button>
                           )}
-                          {loan.closureRemark && (
+                          {loan.status === "closed" && (
+                            <Button
+                              variant={loan.closureRemark && loan.closureRemark !== "Auto-closed on full repayment" ? "outline" : "default"}
+                              size="sm"
+                              onClick={() => openCloseDialog(loan)}
+                              title={loan.closureRemark && loan.closureRemark !== "Auto-closed on full repayment" ? "Edit Remark" : "Add Remark"}
+                            >
+                              <MessageSquarePlus className="h-4 w-4 mr-1" />
+                              {loan.closureRemark && loan.closureRemark !== "Auto-closed on full repayment" ? "Edit" : "Add Remark"}
+                            </Button>
+                          )}
+                          {loan.closureRemark && loan.closureRemark !== "Auto-closed on full repayment" && (
                             <Button variant="outline" size="sm" onClick={() => fetchCycles(loan.member?._id || "", `${loan.member?.firstName} ${loan.member?.lastName}`)} title="View Closure Remark">
                               <History className="h-4 w-4" />
                             </Button>
@@ -931,10 +946,19 @@ export default function LoansPage() {
           <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
-                <DialogTitle>Close Loan</DialogTitle>
+                <DialogTitle>{closeLoan?.status === "closed" ? (closeLoan?.closureRemark && closeLoan.closureRemark !== "Auto-closed on full repayment" ? "Update Closure Remark" : "Add Closure Remark") : "Close Loan"}</DialogTitle>
                 <DialogDescription>
-                  Close loan {closeLoan?.loanId} for {closeLoan?.member?.firstName} {closeLoan?.member?.lastName}.
-                  The remark will be recorded and shown in this member&apos;s history for future loan decisions.
+                  {closeLoan?.status === "closed" ? (
+                    <>
+                      Add or update remark for auto-closed loan {closeLoan?.loanId} for {closeLoan?.member?.firstName} {closeLoan?.member?.lastName}.
+                      This will be shown in member history.
+                    </>
+                  ) : (
+                    <>
+                      Close loan {closeLoan?.loanId} for {closeLoan?.member?.firstName} {closeLoan?.member?.lastName}.
+                      The remark will be recorded and shown in this member&apos;s history for future loan decisions.
+                    </>
+                  )}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -944,13 +968,15 @@ export default function LoansPage() {
                     className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30 dark:border-border dark:text-foreground"
                     value={closeRemark}
                     onChange={(e) => setCloseRemark(e.target.value)}
-                    placeholder="Why is this loan being closed? e.g. Early closure, paid fully, default, member requested..."
+                    placeholder={closeLoan?.status === "closed" ? "Enter remark for this auto-closed loan..." : "Why is this loan being closed? e.g. Early closure, paid fully, default, member requested..."}
                   />
                 </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>Cancel</Button>
-                <Button variant="destructive" onClick={handleCloseLoan}>Confirm Close</Button>
+                <Button variant={closeLoan?.status === "closed" ? "default" : "destructive"} onClick={handleCloseLoan}>
+                  {closeLoan?.status === "closed" ? "Save Remark" : "Confirm Close"}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

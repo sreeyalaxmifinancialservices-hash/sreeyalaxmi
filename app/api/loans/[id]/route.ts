@@ -128,6 +128,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           { status: 403 }
         );
       }
+      // Allow adding/updating remark on already closed loans (auto-closed loans have no remark)
+      if (loan.status === "closed") {
+        loan.closureRemark = remarks || loan.closureRemark || "";
+        if (remarks) loan.remarks = remarks;
+        // ensure dates exist for auto-closed loans that were missing them
+        if (!loan.closedAt) loan.closedAt = new Date();
+        if (!loan.preCloseDate) loan.preCloseDate = loan.closedAt;
+        await loan.save();
+        return NextResponse.json({
+          success: true,
+          data: loan,
+          message: "Closure remark updated successfully",
+        });
+      }
       if (!["active", "disbursed", "approved"].includes(loan.status)) {
         return NextResponse.json(
           { success: false, error: "Loan cannot be closed from current status" },

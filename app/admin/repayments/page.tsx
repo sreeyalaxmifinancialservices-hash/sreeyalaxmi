@@ -18,6 +18,7 @@ interface Repayment {
   loan: { loanId: string; loanAmount: number }
   member: { firstName: string; lastName: string; memberCode: string }
   principal: number
+  advanceAmount: number
   total: number
   noOfWeeksPaid: number
   installmentNumber: number
@@ -51,10 +52,9 @@ export default function RepaymentsPage() {
   const [pagination, setPagination] = React.useState({ page: 1, pages: 1, total: 0 })
 
   const [form, setForm] = React.useState({
-    loan: "", principal: 0, paymentMethod: "cash", paymentDate: "",
-    insuranceAmount: 0, sd: 0, sbSavings: 0, dueAmount: 0, previousDue: 0,
-    advanceAmount: 0, loanFees: 0, preClose: 0, noOfWeeksPaid: 1, remarks: "",
+    loan: "", principal: 0, advanceAmount: 0, paymentMethod: "cash", paymentDate: "", remarks: "",
   })
+  const [formError, setFormError] = React.useState("")
 
   const fetchRepayments = React.useCallback(async (page = 1) => {
     try {
@@ -97,22 +97,48 @@ export default function RepaymentsPage() {
         ...prev,
         loan: loanId,
         principal: weekly,
-        noOfWeeksPaid: loan.installmentsPaid + 1,
       }))
     }
   }
 
+  const validateForm = (): string | null => {
+    if (!form.loan) return "Please select a loan"
+    if (!form.principal || Number(form.principal) <= 0) return "Principal amount must be greater than 0"
+    if (Number(form.advanceAmount) < 0) return "Advance amount cannot be negative"
+    if (!form.paymentDate) return "Payment date is required"
+    const d = new Date(form.paymentDate)
+    const today = new Date()
+    today.setHours(23, 59, 59, 999)
+    if (d > today) return "Payment date cannot be in the future"
+    if (selectedLoan) {
+      const total = Number(form.principal) + Number(form.advanceAmount || 0)
+      if (total > selectedLoan.outstandingBalance) return `Total (principal + advance = ₹${total.toLocaleString()}) cannot exceed outstanding ₹${selectedLoan.outstandingBalance.toLocaleString()}`
+    }
+    return null
+  }
+
   const handleCreate = async () => {
-    if (!form.loan || !form.paymentDate) {
-      toast.error("Please select a loan and payment date")
+    const err = validateForm()
+    if (err) {
+      setFormError(err)
+      toast.error(err)
       return
     }
+    setFormError("")
     try {
       setSubmitting(true)
+      const payload = {
+        ...form,
+        principal: Number(form.principal),
+        advanceAmount: Number(form.advanceAmount || 0),
+        // keep defaults for optional backend fields
+        insuranceAmount: 0, sd: 0, sbSavings: 0, dueAmount: 0, previousDue: 0, loanFees: 0, preClose: 0,
+        noOfWeeksPaid: selectedLoan ? selectedLoan.installmentsPaid + 1 : 1,
+      }
       const res = await fetch("/api/repayments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       })
       const json = await res.json()
       if (json.success) {
@@ -120,13 +146,13 @@ export default function RepaymentsPage() {
         setDialogOpen(false)
         setSelectedLoan(null)
         setForm({
-          loan: "", principal: 0, paymentMethod: "cash", paymentDate: "",
-          insuranceAmount: 0, sd: 0, sbSavings: 0, dueAmount: 0, previousDue: 0,
-          advanceAmount: 0, loanFees: 0, preClose: 0, noOfWeeksPaid: 1, remarks: "",
+          loan: "", principal: 0, advanceAmount: 0, paymentMethod: "cash", paymentDate: "", remarks: "",
         })
+        setFormError("")
         fetchRepayments()
       } else {
         toast.error(json.error || "Failed to record repayment")
+        setFormError(json.error || "Failed to record repayment")
       }
     } catch {
       toast.error("Failed to record repayment")
@@ -259,6 +285,7 @@ export default function RepaymentsPage() {
               <TableHead>Loan ID</TableHead>
               <TableHead>Member</TableHead>
               <TableHead>Principal</TableHead>
+              <TableHead>Advance</TableHead>
               <TableHead>Total</TableHead>
               <TableHead>Week Paid</TableHead>
               <TableHead>Installment</TableHead>
@@ -269,19 +296,25 @@ export default function RepaymentsPage() {
           <TableBody>
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>{Array.from({ length: 9 }).map((_, j) => (
+                <TableRow key={i}>{Array.from({ length: 10 }).map((_, j) => (
                   <TableCell key={j}><Skeleton className="h-4 w-[60px]" /></TableCell>
                 ))}</TableRow>
               ))
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">No repayments found</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">No repayments found</TableCell></TableRow>
             ) : filtered.map(r => (
               <TableRow key={r._id}>
                 <TableCell className="font-mono text-sm">{r.repaymentId}</TableCell>
                 <TableCell className="font-mono text-sm">{r.loan?.loanId || "—"}</TableCell>
                 <TableCell>{r.member?.firstName} {r.member?.lastName}</TableCell>
                 <TableCell>₹{r.principal?.toLocaleString()}</TableCell>
-                <TableCell>₹{r.total?.toLocaleString()}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <span>₹{(r.advanceAmount ?? 0).toLocaleString()}</span>
+                    {(r.advanceAmount ?? 0) > 0 ? <Badge variant="default" className="text-xs">Advance</Badge> : <Badge variant="outline" className="text-xs">No</Badge>}
+                  </div>
+                </TableCell>
+                <TableCell className="font-medium">₹{r.total?.toLocaleString()}</TableCell>
                 <TableCell>{r.noOfWeeksPaid}</TableCell>
                 <TableCell>#{r.installmentNumber}</TableCell>
                 <TableCell>{r.paymentDate ? new Date(r.paymentDate).toLocaleDateString("en-IN") : "—"}</TableCell>
@@ -306,14 +339,15 @@ export default function RepaymentsPage() {
         </div>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-4xl">
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setFormError("") }}>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Record Repayment</DialogTitle>
+            <p className="text-sm text-muted-foreground">Select loan and enter principal & advance. Both will be deducted from outstanding.</p>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label>Select Loan</Label>
+              <Label>Select Loan *</Label>
               <Select value={form.loan} onValueChange={v => handleLoanSelect(v ?? "")}>
                 <SelectTrigger className="w-full"><SelectValue placeholder="Select a loan" /></SelectTrigger>
                 <SelectContent alignItemWithTrigger={false} className="min-w-[500px]">
@@ -327,29 +361,30 @@ export default function RepaymentsPage() {
             </div>
 
             {selectedLoan && (
-              <div className="rounded-lg border p-3 bg-muted/50 grid grid-cols-4 gap-3 text-sm">
-                <div><span className="text-muted-foreground">Loan ID:</span> <span className="font-medium">{selectedLoan.loanId}</span></div>
+              <div className="rounded-lg border p-3 bg-muted/50 grid grid-cols-2 gap-3 text-sm">
                 <div><span className="text-muted-foreground">Outstanding:</span> <span className="font-medium">₹{selectedLoan.outstandingBalance?.toLocaleString()}</span></div>
-                <div><span className="text-muted-foreground">Weekly Repayment:</span> <span className="font-medium">₹{selectedLoan.weeklyRepayment?.toLocaleString()}</span></div>
-                <div><span className="text-muted-foreground">Weeks Paid:</span> <span className="font-medium">{selectedLoan.installmentsPaid}/{selectedLoan.noOfWeeks}</span></div>
+                <div><span className="text-muted-foreground">Weekly:</span> <span className="font-medium">₹{selectedLoan.weeklyRepayment?.toLocaleString()}</span></div>
+                <div className="col-span-2 text-xs text-muted-foreground">Total to deduct: <span className="font-medium text-foreground">₹{(Number(form.principal||0)+Number(form.advanceAmount||0)).toLocaleString()}</span> {(Number(form.principal||0)+Number(form.advanceAmount||0) > selectedLoan.outstandingBalance) && <span className="text-destructive"> - exceeds outstanding!</span>}</div>
               </div>
             )}
 
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Principal Amount</Label>
-                <Input type="number" value={form.principal || ""} onChange={e => setForm({ ...form, principal: Number(e.target.value) })} />
+                <Label>Principal Amount *</Label>
+                <Input type="number" min={0} value={form.principal || ""} placeholder="e.g. 1000" onChange={e => setForm({ ...form, principal: Number(e.target.value) })} />
               </div>
               <div className="space-y-2">
-                <Label>Weeks Paid</Label>
-                <Input type="number" value={form.noOfWeeksPaid || ""} onChange={e => setForm({ ...form, noOfWeeksPaid: Number(e.target.value) })} />
+                <Label>Advance Amount</Label>
+                <Input type="number" min={0} value={form.advanceAmount || ""} placeholder="0" onChange={e => setForm({ ...form, advanceAmount: Number(e.target.value) })} />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Payment Date</Label>
+                <Label>Payment Date *</Label>
                 <Input type="date" value={form.paymentDate} onChange={e => setForm({ ...form, paymentDate: e.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label>Payment Method</Label>
+                <Label>Payment Method *</Label>
                 <Select value={form.paymentMethod} onValueChange={v => setForm({ ...form, paymentMethod: v ?? "cash" })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -361,51 +396,14 @@ export default function RepaymentsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-4 gap-4">
-              <div className="space-y-2">
-                <Label>Insurance</Label>
-                <Input type="number" value={form.insuranceAmount || ""} onChange={e => setForm({ ...form, insuranceAmount: Number(e.target.value) })} />
-              </div>
-              <div className="space-y-2">
-                <Label>S.D.</Label>
-                <Input type="number" value={form.sd || ""} onChange={e => setForm({ ...form, sd: Number(e.target.value) })} />
-              </div>
-              <div className="space-y-2">
-                <Label>S.B. Savings</Label>
-                <Input type="number" value={form.sbSavings || ""} onChange={e => setForm({ ...form, sbSavings: Number(e.target.value) })} />
-              </div>
-              <div className="space-y-2">
-                <Label>Loan Fees</Label>
-                <Input type="number" value={form.loanFees || ""} onChange={e => setForm({ ...form, loanFees: Number(e.target.value) })} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 gap-4">
-              <div className="space-y-2">
-                <Label>Due Amount</Label>
-                <Input type="number" value={form.dueAmount || ""} onChange={e => setForm({ ...form, dueAmount: Number(e.target.value) })} />
-              </div>
-              <div className="space-y-2">
-                <Label>Previous Due</Label>
-                <Input type="number" value={form.previousDue || ""} onChange={e => setForm({ ...form, previousDue: Number(e.target.value) })} />
-              </div>
-              <div className="space-y-2">
-                <Label>Advance</Label>
-                <Input type="number" value={form.advanceAmount || ""} onChange={e => setForm({ ...form, advanceAmount: Number(e.target.value) })} />
-              </div>
-              <div className="space-y-2">
-                <Label>Pre-Close</Label>
-                <Input type="number" value={form.preClose || ""} onChange={e => setForm({ ...form, preClose: Number(e.target.value) })} />
-              </div>
-            </div>
-
             <div className="space-y-2">
               <Label>Remarks</Label>
               <Input value={form.remarks} onChange={e => setForm({ ...form, remarks: e.target.value })} placeholder="Optional" />
             </div>
+            {formError && <p className="text-sm text-destructive">{formError}</p>}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setDialogOpen(false); setFormError("") }}>Cancel</Button>
             <Button onClick={handleCreate} disabled={submitting}>
               {submitting ? "Saving..." : "Record Payment"}
             </Button>
