@@ -151,11 +151,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await requireRole(["admin", "staff"]);
 
     const { id } = await params;
-    const center = await Center.findByIdAndUpdate(
-      id,
-      { status: "inactive" },
-      { new: true }
-    ).lean();
+    const center = await Center.findById(id).lean();
 
     if (!center) {
       return NextResponse.json(
@@ -164,7 +160,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       );
     }
 
-    return NextResponse.json({ success: true, message: "Center deactivated successfully" });
+    await Center.findByIdAndDelete(id);
+
+    return NextResponse.json({ success: true, message: "Center deleted successfully" });
   } catch (error: any) {
     console.error(error);
     if (error.message === "Unauthorized" || error.message === "Forbidden") {

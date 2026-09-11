@@ -148,14 +148,15 @@ export default function CentersPage() {
       const res = await fetch(`/api/centers/${deleting._id}`, { method: "DELETE" })
       const json = await res.json()
       if (json.success) {
-        toast.success("Center deactivated")
+        toast.success("Center deleted")
         setDeleteDialogOpen(false)
+        setDeleting(null)
         fetchCenters(pagination.page)
       } else {
-        toast.error(json.error || "Failed to deactivate")
+        toast.error(json.error || "Failed to delete")
       }
     } catch {
-      toast.error("Failed to deactivate")
+      toast.error("Failed to delete")
     } finally {
       setSubmitting(false)
     }
@@ -358,13 +359,13 @@ export default function CentersPage() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Deactivate Center</AlertDialogTitle>
-            <AlertDialogDescription>Are you sure you want to deactivate &quot;{deleting?.name}&quot;?</AlertDialogDescription>
+            <AlertDialogTitle>Delete Center</AlertDialogTitle>
+            <AlertDialogDescription>Are you sure you want to delete &quot;{deleting?.name}&quot;? This action cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} disabled={submitting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {submitting ? "Deactivating..." : "Deactivate"}
+              {submitting ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

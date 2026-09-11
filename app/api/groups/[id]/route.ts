@@ -79,11 +79,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await requireAuth();
 
     const { id } = await params;
-    const group = await Group.findByIdAndUpdate(
-      id,
-      { status: "inactive" },
-      { new: true }
-    ).lean();
+    const group = await Group.findById(id).lean();
 
     if (!group) {
       return NextResponse.json(
@@ -92,7 +88,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       );
     }
 
-    return NextResponse.json({ success: true, message: "Group deactivated successfully" });
+    await Group.findByIdAndDelete(id);
+
+    return NextResponse.json({ success: true, message: "Group deleted successfully" });
   } catch (error: any) {
     console.error(error);
     if (error.message === "Unauthorized") {

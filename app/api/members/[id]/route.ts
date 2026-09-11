@@ -113,11 +113,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await requireAuth();
 
     const { id } = await params;
-    const member = await Member.findByIdAndUpdate(
-      id,
-      { status: "inactive" },
-      { new: true }
-    ).lean();
+    const member = await Member.findById(id).lean();
 
     if (!member) {
       return NextResponse.json(
@@ -130,7 +126,27 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       await Group.findByIdAndUpdate(member.group, { $inc: { memberCount: -1 } });
     }
 
-    return NextResponse.json({ success: true, message: "Member deactivated successfully" });
+    // If this member was a leader (assigned to a center), remove the linked leader as well
+    try {
+      const Leader = (await import("@/lib/models/Leader")).default;
+      const User = (await import("@/lib/models/User")).default;
+      const leaders = await Leader.find({ member: id }).lean();
+      for (const l of leaders) {
+        if ((l as any).center) {
+          await Center.findByIdAndUpdate((l as any).center, { $unset: { leader: "" } });
+        }
+        if ((l as any).user) {
+          await User.findByIdAndDelete((l as any).user);
+        }
+        await Leader.findByIdAndDelete((l as any)._id);
+      }
+    } catch (e) {
+      console.error("Failed to cleanup leader for deleted member:", e);
+    }
+
+    await Member.findByIdAndDelete(id);
+
+    return NextResponse.json({ success: true, message: "Member deleted successfully" });
   } catch (error: any) {
     console.error(error);
     if (error.message === "Unauthorized") {

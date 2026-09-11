@@ -103,23 +103,22 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     const { id } = await params;
     const leaderDoc = await Leader.findById(id).lean();
-    if (leaderDoc?.center) {
-      await Center.findByIdAndUpdate(leaderDoc.center, { $unset: { leader: "" } });
-    }
-    const leader = await Leader.findByIdAndUpdate(
-      id,
-      { status: "inactive" },
-      { new: true }
-    ).lean();
-
-    if (!leader) {
+    if (!leaderDoc) {
       return NextResponse.json(
         { success: false, error: "Leader not found" },
         { status: 404 }
       );
     }
+    if (leaderDoc?.center) {
+      await Center.findByIdAndUpdate(leaderDoc.center, { $unset: { leader: "" } });
+    }
+    if (leaderDoc?.user) {
+      const User = (await import("@/lib/models/User")).default;
+      await User.findByIdAndDelete(leaderDoc.user);
+    }
+    await Leader.findByIdAndDelete(id);
 
-    return NextResponse.json({ success: true, message: "Leader deactivated successfully" });
+    return NextResponse.json({ success: true, message: "Leader deleted successfully" });
   } catch (error: any) {
     console.error(error);
     if (error.message === "Unauthorized" || error.message === "Forbidden") {

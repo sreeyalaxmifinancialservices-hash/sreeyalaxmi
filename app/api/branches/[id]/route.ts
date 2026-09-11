@@ -82,28 +82,13 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await requireRole(["admin"]);
 
     const { id } = await params;
-    const { searchParams } = new URL(req.url);
-    const permanent = searchParams.get("permanent") === "true";
-
-    if (permanent) {
-      const branch = await Branch.findByIdAndDelete(id).lean();
-      if (!branch) {
-        return NextResponse.json({ success: false, error: "Branch not found" }, { status: 404 });
-      }
-      return NextResponse.json({ success: true, message: "Branch deleted permanently" });
-    }
-
-    const branch = await Branch.findByIdAndUpdate(
-      id,
-      { status: "inactive" },
-      { new: true }
-    ).lean();
-
+    const branch = await Branch.findById(id).lean();
     if (!branch) {
       return NextResponse.json({ success: false, error: "Branch not found" }, { status: 404 });
     }
+    await Branch.findByIdAndDelete(id);
 
-    return NextResponse.json({ success: true, message: "Branch deactivated successfully" });
+    return NextResponse.json({ success: true, message: "Branch deleted successfully" });
   } catch (error: any) {
     console.error(error);
     if (error.message === "Unauthorized" || error.message === "Forbidden") {
