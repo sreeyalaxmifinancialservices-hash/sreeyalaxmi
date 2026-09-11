@@ -77,7 +77,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     { title: "Loans", url: "/staff/loans", icon: <LandmarkIcon />, badge: counts.pendingLoans },
     { title: "Repayments", url: "/staff/repayments", icon: <CreditCardIcon /> },
     // { title: "Collections", url: "/staff/collections", icon: <ClipboardListIcon /> },
-    { title: "Group Collection", url: "/staff/group-collection", icon: <ClipboardListIcon />, badge: counts.pendingGroupAssignments },
+    { title: "Center Collection", url: "/staff/group-collection", icon: <ClipboardListIcon />, badge: counts.pendingGroupAssignments },
     { title: "Collection History", url: "/staff/group-collection/history", icon: <ClipboardListIcon /> },
     { title: "Member & Loan Search", url: "/staff/member-search", icon: <SearchIcon /> },
   ]

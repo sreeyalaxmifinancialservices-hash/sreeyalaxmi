@@ -19,7 +19,7 @@ interface Branch { _id: string; name: string; code: string }
 interface Leader { _id: string; firstName: string; lastName: string; phone: string }
 interface Group {
   _id: string; name: string; code: string
-  center: Center; branch: Branch; leader?: Leader
+  center: Center; branch: Branch
   memberCount: number; status: string
 }
 interface Pagination { page: number; limit: number; total: number; pages: number }
@@ -198,7 +198,6 @@ export default function StaffGroupsPage() {
                     <TableHead>Group Name</TableHead>
                     <TableHead>Center</TableHead>
                     <TableHead>Branch</TableHead>
-                    <TableHead>Leader</TableHead>
                     <TableHead>Members</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -210,7 +209,6 @@ export default function StaffGroupsPage() {
                       <TableCell className="font-medium">{g.name}</TableCell>
                       <TableCell>{g.center?.name || "—"}</TableCell>
                       <TableCell>{g.branch?.name || "—"}</TableCell>
-                      <TableCell>{g.leader ? `${g.leader.firstName} ${g.leader.lastName}` : "—"}</TableCell>
                       <TableCell>{g.memberCount}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">

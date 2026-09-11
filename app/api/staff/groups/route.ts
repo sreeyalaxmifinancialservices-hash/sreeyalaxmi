@@ -39,7 +39,6 @@ export async function GET(req: NextRequest) {
       Group.find(filter)
         .populate("center", "name code")
         .populate("branch", "name code")
-        .populate("leader", "firstName lastName phone")
         .collation({ locale: "en", numericOrdering: true })
         .sort({ name: 1 })
         .skip(skip)

@@ -86,7 +86,7 @@ export default function StaffCollectionHistoryPage() {
               Collection History
             </h1>
             <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-              View all group collection submissions and their status.
+              View all center collection submissions and their status.
             </p>
           </div>
 

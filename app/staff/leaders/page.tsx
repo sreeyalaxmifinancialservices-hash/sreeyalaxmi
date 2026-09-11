@@ -14,11 +14,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { PlusIcon, PencilIcon, Trash2Icon, Loader2Icon } from "lucide-react"
 import { toast } from "sonner"
 
-interface Group { _id: string; name: string; code: string }
+interface Center { _id: string; name: string; code: string }
 interface Member { _id: string; firstName: string; lastName: string; phone: string; email?: string; memberCode: string }
 interface Leader {
   _id: string; firstName: string; lastName: string; phone: string; email: string
-  group: Group; status: string
+  center: Center; group?: any; status: string
 }
 interface Pagination { page: number; limit: number; total: number; pages: number }
 
@@ -29,11 +29,11 @@ export default function StaffLeadersPage() {
   const [search, setSearch] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
-  const [groups, setGroups] = useState<Group[]>([])
+  const [centers, setCenters] = useState<Center[]>([])
   const [members, setMembers] = useState<Member[]>([])
 
   const [addOpen, setAddOpen] = useState(false)
-  const [addForm, setAddForm] = useState({ firstName: "", lastName: "", phone: "", email: "", group: "", memberId: "" })
+  const [addForm, setAddForm] = useState({ firstName: "", lastName: "", phone: "", email: "", center: "", memberId: "" })
 
   const [editOpen, setEditOpen] = useState(false)
   const [editLeader, setEditLeader] = useState<Leader | null>(null)
@@ -42,23 +42,23 @@ export default function StaffLeadersPage() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteLeader, setDeleteLeader] = useState<Leader | null>(null)
 
-  const fetchGroups = useCallback(async () => {
+  const fetchCenters = useCallback(async () => {
     try {
-      const res = await fetch("/api/staff/groups?limit=100").then((r) => r.json())
-      if (res.success) setGroups(res.data)
+      const res = await fetch("/api/staff/centers?limit=100").then((r) => r.json())
+      if (res.success) setCenters(res.data)
     } catch {}
   }, [])
 
-  const fetchMembers = useCallback(async (groupId: string) => {
+  const fetchMembers = useCallback(async (centerId: string) => {
     setMembers([])
-    if (!groupId) return
+    if (!centerId) return
     try {
-      const res = await fetch(`/api/staff/members?group=${groupId}&limit=100&status=active`).then((r) => r.json())
+      const res = await fetch(`/api/staff/members?center=${centerId}&limit=100&status=active`).then((r) => r.json())
       if (res.success) setMembers(res.data)
     } catch {}
   }, [])
 
-  useEffect(() => { fetchGroups() }, [fetchGroups])
+  useEffect(() => { fetchCenters() }, [fetchCenters])
 
   const fetchLeaders = useCallback(async (page = 1) => {
     setLoading(true)
@@ -83,8 +83,8 @@ export default function StaffLeadersPage() {
   useEffect(() => { fetchLeaders() }, [fetchLeaders])
 
   const handleAdd = async () => {
-    if (!addForm.firstName || !addForm.group) {
-      toast.error("Leader first name and group are required")
+    if (!addForm.firstName || !addForm.center) {
+      toast.error("Leader first name and center are required")
       return
     }
     try {
@@ -98,7 +98,7 @@ export default function StaffLeadersPage() {
       if (json.success) {
         toast.success(json.message)
         setAddOpen(false)
-        setAddForm({ firstName: "", lastName: "", phone: "", email: "", group: "", memberId: "" })
+        setAddForm({ firstName: "", lastName: "", phone: "", email: "", center: "", memberId: "" })
         setMembers([])
         fetchLeaders()
       } else {
@@ -201,7 +201,7 @@ export default function StaffLeadersPage() {
                     <TableHead>Name</TableHead>
                     <TableHead>Phone</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Group</TableHead>
+                    <TableHead>Center</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -211,7 +211,7 @@ export default function StaffLeadersPage() {
                       <TableCell className="font-medium">{l.firstName} {l.lastName}</TableCell>
                       <TableCell>{l.phone || "—"}</TableCell>
                       <TableCell>{l.email || "—"}</TableCell>
-                      <TableCell>{l.group?.name || "—"}</TableCell>
+                      <TableCell>{l.center?.name || "—"}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
                           <Button
@@ -258,21 +258,21 @@ export default function StaffLeadersPage() {
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>Add New Leader</DialogTitle>
-              <DialogDescription>Submit a request to add a new leader. It will be active after admin approval.</DialogDescription>
+              <DialogDescription>Submit a request to add a new leader for a center. It will be active after admin approval.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>Group *</Label>
+                <Label>Center *</Label>
                 <select
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm dark:bg-input/30 dark:border-border dark:text-foreground dark:[&>option]:bg-background dark:[&>option]:text-foreground"
-                  value={addForm.group}
+                  value={addForm.center}
                   onChange={(e) => {
-                    setAddForm({ ...addForm, group: e.target.value, memberId: "" })
+                    setAddForm({ ...addForm, center: e.target.value, memberId: "" })
                     fetchMembers(e.target.value)
                   }}
                 >
-                  <option value="">Select group</option>
-                  {groups.map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}
+                  <option value="">Select center</option>
+                  {centers.map((c) => <option key={c._id} value={c._id}>{c.name} ({c.code})</option>)}
                 </select>
               </div>
               <div className="space-y-2">
@@ -292,7 +292,7 @@ export default function StaffLeadersPage() {
                     })
                   }}
                 >
-                  <option value="">Select member from group</option>
+                  <option value="">Select member from center</option>
                   {members.map((m) => <option key={m._id} value={m._id}>{m.firstName} {m.lastName} ({m.memberCode})</option>)}
                 </select>
               </div>
