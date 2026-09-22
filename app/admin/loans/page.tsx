@@ -143,6 +143,9 @@ export default function LoansPage() {
 
   const [memberHistory, setMemberHistory] = React.useState<Loan[]>([])
   const [historyLoading, setHistoryLoading] = React.useState(false)
+  const [memberSearch, setMemberSearch] = React.useState("")
+  const [memberListOpen, setMemberListOpen] = React.useState(false)
+  const [membersLoading, setMembersLoading] = React.useState(false)
 
   const [loanConfig, setLoanConfig] = React.useState<LoanCalcConfig>({ processingFee: 100, insuranceRate: 3, interestRate: 10, defaultNoOfWeeks: 50 })
 
@@ -194,9 +197,9 @@ export default function LoansPage() {
   const fetchDropdowns = React.useCallback(async () => {
     try {
       const [bRes, cRes, gRes] = await Promise.all([
-        fetch("/api/branches?limit=100&status=active"),
-        fetch("/api/centers?limit=100&status=active"),
-        fetch("/api/groups?limit=100&status=active"),
+        fetch("/api/branches?limit=500&status=active"),
+        fetch("/api/centers?limit=500&status=active"),
+        fetch("/api/groups?limit=500&status=active"),
       ])
       const [bJson, cJson, gJson] = await Promise.all([
         bRes.json(), cRes.json(), gRes.json(),
@@ -212,20 +215,54 @@ export default function LoansPage() {
     fetchLoanConfig()
   }, [fetchDropdowns, fetchLoanConfig])
 
-  const fetchMembers = React.useCallback(async (branchId?: string, centerId?: string) => {
+  const fetchMembers = React.useCallback(async (branchId?: string, centerId?: string, searchText?: string) => {
     try {
-      const params = new URLSearchParams({ limit: "100", status: "active" })
+      setMembersLoading(true)
+      const params = new URLSearchParams({ limit: "1000", status: "active" })
       if (branchId) params.set("branch", branchId)
       if (centerId) params.set("center", centerId)
+      if (searchText) params.set("search", searchText)
       const res = await fetch(`/api/members?${params}`)
       const json = await res.json()
       if (json.success) setMembers(json.data)
-    } catch { /* ignore */ }
+    } catch { /* ignore */ } finally {
+      setMembersLoading(false)
+    }
   }, [])
 
+  // Initial fetch when dialog opens — fetch ALL members (no branch/center filter)
+  // so no member is missing from the list.
   React.useEffect(() => {
-    if (dialogOpen) fetchMembers(form.branch || undefined, form.center || undefined)
-  }, [dialogOpen, form.branch, form.center, fetchMembers])
+    if (dialogOpen) {
+      setMemberSearch("")
+      setMemberListOpen(false)
+      fetchMembers(undefined, undefined, undefined)
+    }
+  }, [dialogOpen, fetchMembers])
+
+  // Debounced server-side search for members (by name / code / phone).
+  // NOTE: intentionally NOT filtering by branch/center here so ALL
+  // members stay visible. Branch/center selects only affect the loan form.
+  React.useEffect(() => {
+    if (!dialogOpen) return
+    const t = setTimeout(() => {
+      fetchMembers(undefined, undefined, memberSearch.trim() || undefined)
+    }, 400)
+    return () => clearTimeout(t)
+  }, [memberSearch, dialogOpen, fetchMembers])
+
+  const filteredMembers = React.useMemo(() => {
+    const q = memberSearch.trim().toLowerCase()
+    if (!q) return members
+    return members.filter((m) =>
+      `${m.firstName} ${m.lastName} ${m.memberCode}`.toLowerCase().includes(q)
+    )
+  }, [members, memberSearch])
+
+  const selectedMember = React.useMemo(
+    () => members.find((x) => x._id === form.member),
+    [members, form.member]
+  )
 
   const fetchMemberHistory = React.useCallback(async (memberId: string) => {
     if (!memberId) { setMemberHistory([]); return }
@@ -240,6 +277,24 @@ export default function LoansPage() {
       setHistoryLoading(false)
     }
   }, [])
+
+  const handleMemberSelect = React.useCallback((memberId: string) => {
+    const m = members.find((x) => x._id === memberId)
+    if (memberId) fetchMemberHistory(memberId)
+    else setMemberHistory([])
+    if (form.loanType === "group") {
+      setForm((prev) => ({
+        ...prev,
+        member: memberId,
+        branch: m?.branch?._id || prev.branch,
+        center: m?.center?._id || prev.center,
+        group: m?.group?._id || prev.group,
+      }))
+    } else {
+      setForm((prev) => ({ ...prev, member: memberId }))
+    }
+    setMemberListOpen(false)
+  }, [members, form.loanType, fetchMemberHistory])
 
   const calc = React.useMemo(() => {
     if (!form.loanAmount) return null
@@ -626,9 +681,16 @@ export default function LoansPage() {
             </div>
           )}
 
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogContent className="sm:max-w-lg">
-              <DialogHeader>
+          <Dialog open={dialogOpen} onOpenChange={(open) => {
+            setDialogOpen(open)
+            if (!open) {
+              setMemberSearch("")
+              setMemberListOpen(false)
+              setMemberHistory([])
+            }
+          }}>
+            <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+              <DialogHeader className="sticky top-0 z-10 bg-popover pb-2">
                 <DialogTitle>Create New Loan</DialogTitle>
                 <DialogDescription>Select loan type, member, and enter loan amount.</DialogDescription>
               </DialogHeader>
@@ -645,33 +707,76 @@ export default function LoansPage() {
                     <option value="bank">Bank Loan</option>
                   </select>
                 </div>
-                <div className="space-y-2">
-                  <Label>Member</Label>
-                  <select
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30 dark:border-border dark:text-foreground dark:[&>option]:bg-background dark:[&>option]:text-foreground"
-                    style={{ colorScheme }}
-                    value={form.member}
-                    onChange={(e) => {
-                      const v = e.target.value
-                      const m = members.find((x) => x._id === v)
-                      if (v) fetchMemberHistory(v)
-                      else setMemberHistory([])
-                      if (form.loanType === "group") {
-                        setForm({
-                          ...form,
-                          member: v,
-                          branch: m?.branch?._id || form.branch,
-                          center: m?.center?._id || form.center,
-                          group: m?.group?._id || form.group,
-                        })
-                      } else {
-                        setForm({ ...form, member: v })
-                      }
-                    }}
-                  >
-                    <option value="">Select member</option>
-                    {members.map((m) => <option key={m._id} value={m._id}>{m.firstName} {m.lastName} ({m.memberCode})</option>)}
-                  </select>
+                <div className="col-span-2 space-y-2">
+                  <Label>Member {members.length > 0 && <span className="text-muted-foreground font-normal">({filteredMembers.length} of {members.length} shown)</span>}</Label>
+                  <div className="relative">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                      <Input
+                        placeholder="Search member by name or code..."
+                        value={selectedMember && !memberListOpen && !memberSearch ? `${selectedMember.firstName} ${selectedMember.lastName} (${selectedMember.memberCode})` : memberSearch}
+                        onChange={(e) => {
+                          setMemberSearch(e.target.value)
+                          setMemberListOpen(true)
+                        }}
+                        onFocus={() => setMemberListOpen(true)}
+                        onBlur={() => setTimeout(() => setMemberListOpen(false), 150)}
+                        className="pl-9 pr-9"
+                      />
+                      {(memberSearch || form.member) && (
+                        <button
+                          type="button"
+                          aria-label="Clear member selection"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setMemberSearch("")
+                            setForm((prev) => ({ ...prev, member: "" }))
+                            setMemberHistory([])
+                            setMemberListOpen(true)
+                          }}
+                        >
+                          <XCircle className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    {memberListOpen && (
+                      <div className="mt-1 max-h-60 w-full overflow-y-auto rounded-md border bg-popover shadow-lg">
+                        {membersLoading ? (
+                          <div className="flex items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading members...
+                          </div>
+                        ) : filteredMembers.length === 0 ? (
+                          <p className="p-4 text-center text-sm text-muted-foreground">No members found — try a different search or clear branch/center filter</p>
+                        ) : (
+                          filteredMembers.map((m) => {
+                            const isSelected = form.member === m._id
+                            return (
+                              <button
+                                key={m._id}
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  handleMemberSelect(m._id)
+                                  setMemberSearch("")
+                                }}
+                                className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground ${isSelected ? "bg-accent/60 font-medium" : ""}`}
+                              >
+                                <span className="truncate">{m.firstName} {m.lastName} ({m.memberCode})</span>
+                                {isSelected && <CheckCircle className="h-4 w-4 shrink-0 text-green-600" />}
+                              </button>
+                            )
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {selectedMember && (
+                    <p className="text-xs text-muted-foreground">
+                      Selected: <span className="font-medium text-foreground">{selectedMember.firstName} {selectedMember.lastName} ({selectedMember.memberCode})</span>
+                    </p>
+                  )}
                 </div>
 
                 {form.loanType === "group" && (
@@ -808,9 +913,9 @@ export default function LoansPage() {
                 </div>
               )}
 
-              <DialogFooter>
+              <DialogFooter className="sticky bottom-0 z-10">
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                <Button onClick={handleCreate} disabled={submitting}>
+                <Button onClick={handleCreate} disabled={submitting || !form.member || !form.loanAmount}>
                   {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Create Loan
                 </Button>
