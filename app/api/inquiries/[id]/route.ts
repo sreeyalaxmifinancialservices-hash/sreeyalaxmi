@@ -4,8 +4,10 @@ import Member from "@/lib/models/Member";
 import Leader from "@/lib/models/Leader";
 import Center from "@/lib/models/Center";
 import Group from "@/lib/models/Group";
+import Loan from "@/lib/models/Loan";
 import { connectDB } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
+import { applyLoanEdits, pickLoanChanges } from "@/lib/loan-edit";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -68,9 +70,41 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (status === "completed" && inquiry.editRequest) {
       const { entityType, entityId, newValues } = inquiry.editRequest;
 
-      try {
-        if (entityType === "member") {
-          if (newValues.group) {
+      // Loan corrections need admin sign-off and safe apply (recompute totals, guards)
+      if (entityType === "loan") {
+        if (user.role !== "admin") {
+          return NextResponse.json(
+            { success: false, error: "Only admin can approve loan edits" },
+            { status: 403 }
+          );
+        }
+        try {
+          const loan = await Loan.findById(entityId);
+          if (!loan) {
+            return NextResponse.json(
+              { success: false, error: "Loan not found. It may have been deleted." },
+              { status: 404 }
+            );
+          }
+          const failure = await applyLoanEdits(loan, pickLoanChanges(newValues || {}));
+          if (failure) {
+            return NextResponse.json(
+              { success: false, error: failure.error },
+              { status: failure.status }
+            );
+          }
+          await loan.save();
+        } catch (applyError: any) {
+          console.error("Failed to apply loan edit:", applyError);
+          return NextResponse.json(
+            { success: false, error: applyError?.message || "Failed to apply changes to the loan" },
+            { status: 500 }
+          );
+        }
+      } else {
+        try {
+          if (entityType === "member") {
+            if (newValues.group) {
             const existingMember = await Member.findById(entityId).lean();
             if (existingMember?.group?.toString() !== newValues.group.toString()) {
               await Group.findByIdAndUpdate(existingMember.group, { $inc: { memberCount: -1 } });
@@ -89,6 +123,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           { success: false, error: "Failed to apply changes to the entity" },
           { status: 500 }
         );
+      }
       }
     }
 

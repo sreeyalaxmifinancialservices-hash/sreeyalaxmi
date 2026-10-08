@@ -32,18 +32,28 @@ import {
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
-import { Plus, Search, Loader2, CheckCircle, Banknote, XCircle, Eye, FileSpreadsheet, FileText, History, MessageSquarePlus } from "lucide-react"
+import { Plus, Search, Loader2, CheckCircle, Banknote, XCircle, Eye, FileSpreadsheet, FileText, History, MessageSquarePlus, Pencil, Trash2 } from "lucide-react"
 import { computeLoanBreakdown, LoanCalcConfig } from "@/lib/loan-calc"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface Loan {
   _id: string
   loanId: string
   cycleNumber: number
-  loanType: "group" | "bank"
+  loanType: "group" | "bank" | "old"
   member: { _id: string; firstName: string; lastName: string; memberCode: string }
-  branch: { name: string; code: string }
-  center: { name: string; code: string }
-  group: { name: string; code: string }
+  branch: { _id: string; name: string; code: string }
+  center: { _id: string; name: string; code: string }
+  group: { _id: string; name: string; code: string }
   loanAmount: number
   insuranceAmount: number
   processingFee: number
@@ -118,7 +128,7 @@ export default function LoansPage() {
   const [branchFilter, setBranchFilter] = React.useState("all")
   const [centerFilter, setCenterFilter] = React.useState("all")
   const [dialogOpen, setDialogOpen] = React.useState(false)
-  const [form, setForm] = React.useState({ loanType: "group" as "group" | "bank", member: "", branch: "", center: "", group: "", loanAmount: 0, remarks: "", bankName: "", bankBranchName: "" })
+  const [form, setForm] = React.useState({ loanType: "group" as "group" | "bank" | "old", member: "", branch: "", center: "", group: "", loanAmount: 0, totalReceived: 0, openingDate: "", closureDate: "", remarks: "", bankName: "", bankBranchName: "" })
   const [submitting, setSubmitting] = React.useState(false)
   const [pagination, setPagination] = React.useState({ page: 1, pages: 1, total: 0 })
 
@@ -140,6 +150,27 @@ export default function LoansPage() {
   const [rejectDialogOpen, setRejectDialogOpen] = React.useState(false)
   const [rejectLoan, setRejectLoan] = React.useState<Loan | null>(null)
   const [rejectRemark, setRejectRemark] = React.useState("")
+
+  const [editDatesOpen, setEditDatesOpen] = React.useState(false)
+  const [editLoan, setEditLoan] = React.useState<Loan | null>(null)
+  const [editMember, setEditMember] = React.useState("")
+  const [editAmount, setEditAmount] = React.useState(0)
+  const [editTotalReceived, setEditTotalReceived] = React.useState(0)
+  const [editBranch, setEditBranch] = React.useState("")
+  const [editCenter, setEditCenter] = React.useState("")
+  const [editGroup, setEditGroup] = React.useState("")
+  const [editBankName, setEditBankName] = React.useState("")
+  const [editBankBranch, setEditBankBranch] = React.useState("")
+  const [editRemarks, setEditRemarks] = React.useState("")
+  const [editDisbursement, setEditDisbursement] = React.useState("")
+  const [editClose, setEditClose] = React.useState("")
+  const [editSaving, setEditSaving] = React.useState(false)
+  const [editMemberSearch, setEditMemberSearch] = React.useState("")
+  const [editMemberOpen, setEditMemberOpen] = React.useState(false)
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
+  const [deleteLoan, setDeleteLoan] = React.useState<Loan | null>(null)
+  const [deleteSaving, setDeleteSaving] = React.useState(false)
 
   const [memberHistory, setMemberHistory] = React.useState<Loan[]>([])
   const [historyLoading, setHistoryLoading] = React.useState(false)
@@ -282,7 +313,7 @@ export default function LoansPage() {
     const m = members.find((x) => x._id === memberId)
     if (memberId) fetchMemberHistory(memberId)
     else setMemberHistory([])
-    if (form.loanType === "group") {
+    if (form.loanType === "group" || form.loanType === "old") {
       setForm((prev) => ({
         ...prev,
         member: memberId,
@@ -304,19 +335,37 @@ export default function LoansPage() {
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(val)
 
+  const formatDateDMY = (val?: string | Date) => {
+    if (!val) return "—"
+    const d = val instanceof Date ? val : new Date(val)
+    if (isNaN(d.getTime())) return "—"
+    const dd = String(d.getDate()).padStart(2, "0")
+    const mm = String(d.getMonth() + 1).padStart(2, "0")
+    return `${dd}-${mm}-${d.getFullYear()}`
+  }
+
   const handleCreate = async () => {
     try {
       setSubmitting(true)
+      const payload: Record<string, unknown> = { ...form }
+      if (form.loanType === "old") {
+        if (!form.member) { toast.error("Member is required"); setSubmitting(false); return }
+        if (!form.loanAmount) { toast.error("Principal amount is required"); setSubmitting(false); return }
+        if (!form.totalReceived && form.totalReceived !== 0) { toast.error("Total loan amount received is required"); setSubmitting(false); return }
+        if (!form.openingDate) { toast.error("Opening date is required"); setSubmitting(false); return }
+        if (!form.closureDate) { toast.error("Closure date is required"); setSubmitting(false); return }
+        if (new Date(form.closureDate) < new Date(form.openingDate)) { toast.error("Closure date must be on/after opening date"); setSubmitting(false); return }
+      }
       const res = await fetch("/api/loans", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       })
       const json = await res.json()
       if (json.success) {
         toast.success(json.message)
         setDialogOpen(false)
-        setForm({ loanType: "group", member: "", branch: "", center: "", group: "", loanAmount: 0, remarks: "", bankName: "", bankBranchName: "" })
+        setForm({ loanType: "group", member: "", branch: "", center: "", group: "", loanAmount: 0, totalReceived: 0, openingDate: "", closureDate: "", remarks: "", bankName: "", bankBranchName: "" })
         fetchLoans()
       } else {
         toast.error(json.error || "Failed to create loan")
@@ -425,6 +474,136 @@ export default function LoansPage() {
     }
   }
 
+  const openDeleteDialog = (loan: Loan) => {
+    setDeleteLoan(loan)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteLoan = async () => {
+    if (!deleteLoan) return
+    try {
+      setDeleteSaving(true)
+      const res = await fetch(`/api/loans/${deleteLoan._id}`, {
+        method: "DELETE",
+      })
+      const json = await res.json()
+      if (json.success) {
+        toast.success(json.message || "Loan deleted successfully")
+        setDeleteDialogOpen(false)
+        setDeleteLoan(null)
+        fetchLoans()
+      } else {
+        toast.error(json.error || "Failed to delete loan")
+      }
+    } catch {
+      toast.error("An error occurred")
+    } finally {
+      setDeleteSaving(false)
+    }
+  }
+
+  const toDateInput = (val?: string) => {
+    if (!val) return ""
+    const d = new Date(val)
+    if (isNaN(d.getTime())) return ""
+    return d.toISOString().slice(0, 10)
+  }
+
+  const openEditLoan = (loan: Loan) => {
+    setEditLoan(loan)
+    setEditMember(loan.member?._id || "")
+    setEditAmount(loan.loanAmount || 0)
+    setEditTotalReceived(loan.totalRepayment || 0)
+    setEditBranch(loan.branch?._id || "")
+    setEditCenter(loan.center?._id || "")
+    setEditGroup(loan.group?._id || "")
+    setEditBankName(loan.bankName || "")
+    setEditBankBranch(loan.bankBranchName || "")
+    setEditRemarks((loan as any).remarks || "")
+    setEditDisbursement(toDateInput(loan.disbursementDate))
+    setEditClose(toDateInput(loan.closedAt || loan.preCloseDate))
+    setEditMemberSearch("")
+    setEditMemberOpen(false)
+    setEditDatesOpen(true)
+    if (members.length === 0) fetchMembers(undefined, undefined, undefined)
+  }
+
+  const editFilteredMembers = React.useMemo(() => {
+    const q = editMemberSearch.trim().toLowerCase()
+    if (!q) return members
+    return members.filter((m) =>
+      `${m.firstName} ${m.lastName} ${m.memberCode}`.toLowerCase().includes(q)
+    )
+  }, [members, editMemberSearch])
+
+  const editSelectedMember = React.useMemo(
+    () => members.find((x) => x._id === editMember),
+    [members, editMember]
+  )
+
+  const handleEditMemberSelect = (memberId: string) => {
+    const m = members.find((x) => x._id === memberId)
+    setEditMember(memberId)
+    if (editLoan && (editLoan.loanType === "group" || editLoan.loanType === "old") && m) {
+      setEditBranch(m.branch?._id || "")
+      setEditCenter(m.center?._id || "")
+      setEditGroup(m.group?._id || "")
+    }
+    setEditMemberSearch("")
+    setEditMemberOpen(false)
+  }
+
+  const handleUpdateLoan = async () => {
+    if (!editLoan) return
+    if (!editMember) { toast.error("Member is required"); return }
+    if (!editAmount || editAmount < 1) { toast.error("Loan amount must be greater than 0"); return }
+    if (!editDisbursement) { toast.error("Disbursement date is required"); return }
+    try {
+      setEditSaving(true)
+      const isClosed = ["closed", "preclosed"].includes(editLoan.status)
+      const body: Record<string, string | number | null> = {}
+      // Only send changed fields so untouched values (e.g. computed totals) stay intact
+      if (editMember !== (editLoan.member?._id || "")) body.member = editMember
+      if (editAmount !== editLoan.loanAmount) body.loanAmount = editAmount
+      if (editLoan.loanType === "old" && editTotalReceived !== editLoan.totalRepayment) {
+        body.totalReceived = editTotalReceived
+      }
+      if (editBranch !== (editLoan.branch?._id || "")) body.branch = editBranch
+      if (editCenter !== (editLoan.center?._id || "")) body.center = editCenter
+      if (editGroup !== (editLoan.group?._id || "")) body.group = editGroup
+      if (editBankName !== (editLoan.bankName || "")) body.bankName = editBankName
+      if (editBankBranch !== (editLoan.bankBranchName || "")) body.bankBranchName = editBankBranch
+      if (editRemarks !== ((editLoan as any).remarks || "")) body.remarks = editRemarks
+      if (editDisbursement !== toDateInput(editLoan.disbursementDate)) {
+        body.disbursementDate = new Date(editDisbursement).toISOString()
+      }
+      const origClose = toDateInput(editLoan.closedAt || editLoan.preCloseDate)
+      if (isClosed && editClose !== origClose) {
+        body.closedAt = editClose ? new Date(editClose).toISOString() : null
+        body.preCloseDate = editClose ? new Date(editClose).toISOString() : null
+      }
+      if (Object.keys(body).length === 0) { toast.info("No changes to save"); return }
+      const res = await fetch(`/api/loans/${editLoan._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      const json = await res.json()
+      if (json.success) {
+        toast.success(json.message || "Loan updated")
+        setEditDatesOpen(false)
+        setEditLoan(null)
+        fetchLoans()
+      } else {
+        toast.error(json.error || "Failed to update loan")
+      }
+    } catch {
+      toast.error("An error occurred")
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
   const fetchAllLoans = React.useCallback(async (): Promise<Loan[]> => {
     try {
       const params = new URLSearchParams()
@@ -448,16 +627,17 @@ export default function LoansPage() {
       const allLoans = await fetchAllLoans()
       if (allLoans.length === 0) { toast.error("No data to export"); return }
       const XLSX = await import("xlsx")
-      const headers = ["Loan #", "Member", "Loan Type", "Amount", "Weekly Repayment", "Outstanding", "Status", "Date"]
+      const headers = ["Loan #", "Member ID", "Member", "Loan Type", "Amount", "Weekly Repayment", "Outstanding", "Status", "Date"]
       const rows = allLoans.map((l) => [
         l.loanId,
+        l.member?.memberCode || "",
         `${l.member?.firstName || ""} ${l.member?.lastName || ""}`.trim(),
-        l.loanType === "bank" ? "Bank Loan" : "Group Loan",
+        l.loanType === "bank" ? "Bank Loan" : l.loanType === "old" ? "Old Loan" : "Group Loan",
         l.loanAmount,
         l.weeklyRepayment,
         l.outstandingBalance,
         l.status,
-        new Date(l.createdAt).toLocaleDateString(),
+                formatDateDMY(l.createdAt),
       ])
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
       const wb = XLSX.utils.book_new()
@@ -478,19 +658,20 @@ export default function LoansPage() {
       doc.setFontSize(16)
       doc.text("Loans Report", 14, 22)
       doc.setFontSize(10)
-      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 30)
+      doc.text(`Generated: ${formatDateDMY(new Date())}`, 14, 30)
       autoTable(doc, {
         startY: 36,
-        head: [["Loan #", "Member", "Type", "Amount", "Weekly Repay", "Outstanding", "Status", "Date"]],
+        head: [["Loan #", "Member ID", "Member", "Type", "Amount", "Weekly Repay", "Outstanding", "Status", "Date"]],
         body: allLoans.map((l) => [
           l.loanId,
+          l.member?.memberCode || "",
           `${l.member?.firstName || ""} ${l.member?.lastName || ""}`.trim(),
-          l.loanType === "bank" ? "Bank" : "Group",
+          l.loanType === "bank" ? "Bank" : l.loanType === "old" ? "Old" : "Group",
           `₹${l.loanAmount?.toLocaleString()}`,
           `₹${l.weeklyRepayment?.toLocaleString()}`,
           `₹${l.outstandingBalance?.toLocaleString()}`,
           l.status,
-          new Date(l.createdAt).toLocaleDateString(),
+                  formatDateDMY(l.createdAt),
         ]),
       })
       doc.save("loans-report.pdf")
@@ -556,7 +737,7 @@ export default function LoansPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Loan #</TableHead>
+                  <TableHead>Member ID</TableHead>
                   <TableHead>Member</TableHead>
                   <TableHead>Loan Type</TableHead>
                   <TableHead>Amount</TableHead>
@@ -584,11 +765,11 @@ export default function LoansPage() {
                 ) : (
                   loans.map((loan) => (
                     <TableRow key={loan._id}>
-                      <TableCell className="font-medium">{loan.loanId}</TableCell>
+                      <TableCell className="font-mono text-sm">{loan.member?.memberCode || "—"}</TableCell>
                       <TableCell>{loan.member?.firstName} {loan.member?.lastName}</TableCell>
                       <TableCell>
                         <Badge variant={loan.loanType === "bank" ? "default" : "secondary"}>
-                          {loan.loanType === "bank" ? "Bank Loan" : "Group Loan"}
+                          {loan.loanType === "bank" ? "Bank Loan" : loan.loanType === "old" ? "Old Loan" : "Group Loan"}
                         </Badge>
                       </TableCell>
                       <TableCell>{formatCurrency(loan.loanAmount)}</TableCell>
@@ -597,20 +778,23 @@ export default function LoansPage() {
                       <TableCell>
                         <Badge variant={statusColors[loan.status] || "default"}>{loan.status}</Badge>
                       </TableCell>
-                      <TableCell>{new Date(loan.createdAt).toLocaleDateString()}</TableCell>
+                      <TableCell>{formatDateDMY(loan.disbursementDate || loan.createdAt)}</TableCell>
                       <TableCell>
                         {loan.closedAt ? (
-                          new Date(loan.closedAt).toLocaleDateString()
+                          formatDateDMY(loan.closedAt)
                         ) : loan.preCloseDate ? (
-                          new Date(loan.preCloseDate).toLocaleDateString()
+                          formatDateDMY(loan.preCloseDate)
                         ) : loan.status === "closed" && (loan as any).updatedAt ? (
-                          new Date((loan as any).updatedAt).toLocaleDateString()
+                          formatDateDMY((loan as any).updatedAt)
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
                        <TableCell>
                         <div className="flex gap-1">
+                          <Button variant="ghost" size="icon-sm" onClick={() => openEditLoan(loan)} title="Edit loan">
+                            <Pencil className="h-4 w-4 text-muted-foreground" />
+                          </Button>
                           <Button variant="outline" size="sm" onClick={() => fetchCycles(loan.member?._id || "", `${loan.member?.firstName} ${loan.member?.lastName}`)} title="View Cycles">
                             Cycles
                           </Button>
@@ -660,6 +844,9 @@ export default function LoansPage() {
                               <History className="h-4 w-4" />
                             </Button>
                           )}
+                          <Button variant="ghost" size="icon-sm" onClick={() => openDeleteDialog(loan)} title="Delete Loan">
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -692,7 +879,7 @@ export default function LoansPage() {
             <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader className="sticky top-0 z-10 bg-popover pb-2">
                 <DialogTitle>Create New Loan</DialogTitle>
-                <DialogDescription>Select loan type, member, and enter loan amount.</DialogDescription>
+                <DialogDescription>Select loan type, member, and enter loan details. Choose Old Loan to record a historical loan.</DialogDescription>
               </DialogHeader>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -701,10 +888,11 @@ export default function LoansPage() {
                     className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30 dark:border-border dark:text-foreground dark:[&>option]:bg-background dark:[&>option]:text-foreground"
                     style={{ colorScheme }}
                     value={form.loanType}
-                    onChange={(e) => setForm({ ...form, loanType: e.target.value as "group" | "bank", branch: "", center: "", group: "", bankName: "", bankBranchName: "" })}
+                    onChange={(e) => setForm({ ...form, loanType: e.target.value as "group" | "bank" | "old", branch: "", center: "", group: "", bankName: "", bankBranchName: "" })}
                   >
                     <option value="group">Group Loan</option>
                     <option value="bank">Bank Loan</option>
+                    <option value="old">Old Loan</option>
                   </select>
                 </div>
                 <div className="col-span-2 space-y-2">
@@ -779,7 +967,7 @@ export default function LoansPage() {
                   )}
                 </div>
 
-                {form.loanType === "group" && (
+                {(form.loanType === "group" || form.loanType === "old") && (
                   <>
                     <div className="space-y-2">
                       <Label>Branch</Label>
@@ -788,10 +976,15 @@ export default function LoansPage() {
                         style={{ colorScheme }}
                         value={form.branch}
                         onChange={(e) => setForm({ ...form, branch: e.target.value })}
+                        disabled={form.loanType === "old"}
+                        title={form.loanType === "old" ? "Auto-filled from member" : undefined}
                       >
                         <option value="">Select branch</option>
                         {branches.map((b) => <option key={b._id} value={b._id}>{b.name} ({b.code})</option>)}
                       </select>
+                      {form.loanType === "old" && (
+                        <p className="text-xs text-muted-foreground">Auto-filled from member</p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label>Center</Label>
@@ -800,12 +993,17 @@ export default function LoansPage() {
                         style={{ colorScheme }}
                         value={form.center}
                         onChange={(e) => setForm({ ...form, center: e.target.value })}
+                        disabled={form.loanType === "old"}
+                        title={form.loanType === "old" ? "Auto-filled from member" : undefined}
                       >
                         <option value="">Select center</option>
                         {centers.filter((c) => !form.branch || c.branch?._id === form.branch).map((c) => (
                           <option key={c._id} value={c._id}>{c.name} ({c.code})</option>
                         ))}
                       </select>
+                      {form.loanType === "old" && (
+                        <p className="text-xs text-muted-foreground">Auto-filled from member</p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label>Group</Label>
@@ -814,12 +1012,17 @@ export default function LoansPage() {
                         style={{ colorScheme }}
                         value={form.group}
                         onChange={(e) => setForm({ ...form, group: e.target.value })}
+                        disabled={form.loanType === "old"}
+                        title={form.loanType === "old" ? "Auto-filled from member" : undefined}
                       >
                         <option value="">Select group</option>
                         {groups.filter((g) => !form.center || g.center?._id === form.center).map((g) => (
                           <option key={g._id} value={g._id}>{g.name} ({g.code})</option>
                         ))}
                       </select>
+                      {form.loanType === "old" && (
+                        <p className="text-xs text-muted-foreground">Auto-filled from member</p>
+                      )}
                     </div>
                   </>
                 )}
@@ -845,19 +1048,65 @@ export default function LoansPage() {
                   </>
                 )}
 
-                <div className="space-y-2">
-                  <Label>Loan Amount</Label>
-                  <Input
-                    type="number"
-                    value={form.loanAmount || ""}
-                    onChange={(e) => setForm({ ...form, loanAmount: Number(e.target.value) })}
-                    placeholder="Enter loan amount"
-                  />
-                </div>
-                <div className="col-span-2 space-y-2">
-                  <Label>Remarks</Label>
-                  <Input value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} />
-                </div>
+                {form.loanType === "old" ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Principal Amount</Label>
+                      <Input
+                        type="number"
+                        value={form.loanAmount || ""}
+                        onChange={(e) => setForm({ ...form, loanAmount: Number(e.target.value) })}
+                        placeholder="Enter principal amount"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Total Loan Amount Received</Label>
+                      <Input
+                        type="number"
+                        value={form.totalReceived || ""}
+                        onChange={(e) => setForm({ ...form, totalReceived: Number(e.target.value) })}
+                        placeholder="Enter total amount received"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Opening Date</Label>
+                      <Input
+                        type="date"
+                        value={form.openingDate}
+                        onChange={(e) => setForm({ ...form, openingDate: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Closure Date</Label>
+                      <Input
+                        type="date"
+                        value={form.closureDate}
+                        min={form.openingDate || undefined}
+                        onChange={(e) => setForm({ ...form, closureDate: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-span-2 space-y-2">
+                      <Label>Remarks</Label>
+                      <Input value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} placeholder="Remarks for this old loan..." />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Loan Amount</Label>
+                      <Input
+                        type="number"
+                        value={form.loanAmount || ""}
+                        onChange={(e) => setForm({ ...form, loanAmount: Number(e.target.value) })}
+                        placeholder="Enter loan amount"
+                      />
+                    </div>
+                    <div className="col-span-2 space-y-2">
+                      <Label>Remarks</Label>
+                      <Input value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} />
+                    </div>
+                  </>
+                )}
               </div>
 
               {form.member && (
@@ -887,7 +1136,7 @@ export default function LoansPage() {
                               <span className="font-semibold text-amber-700 dark:text-amber-400">Closure remark: </span>
                               <span className="text-foreground">{l.closureRemark}</span>
                               {l.closedAt && (
-                                <span className="text-muted-foreground"> ({new Date(l.closedAt).toLocaleDateString()})</span>
+                                <span className="text-muted-foreground"> ({formatDateDMY(l.closedAt)})</span>
                               )}
                             </div>
                           )}
@@ -898,7 +1147,7 @@ export default function LoansPage() {
                 </div>
               )}
 
-              {calc && (
+              {calc && form.loanType !== "old" && (
                 <div className="mt-4 rounded-lg bg-muted p-4 space-y-2">
                   <h4 className="font-semibold text-sm">Loan Summary</h4>
                   <div className="grid grid-cols-2 gap-2 text-sm">
@@ -915,9 +1164,12 @@ export default function LoansPage() {
 
               <DialogFooter className="sticky bottom-0 z-10">
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                <Button onClick={handleCreate} disabled={submitting || !form.member || !form.loanAmount}>
+                <Button
+                  onClick={handleCreate}
+                  disabled={submitting || !form.member || !form.loanAmount || (form.loanType === "old" && (!form.totalReceived && form.totalReceived !== 0 || !form.openingDate || !form.closureDate))}
+                >
                   {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Create Loan
+                  {form.loanType === "old" ? "Record Old Loan" : "Create Loan"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -958,12 +1210,12 @@ export default function LoansPage() {
                         <TableRow key={loan._id}>
                           <TableCell className="font-medium">{loan.cycleNumber}</TableCell>
                           <TableCell>{loan.loanId}</TableCell>
-                          <TableCell>{loan.disbursementDate ? new Date(loan.disbursementDate).toLocaleDateString() : "—"}</TableCell>
+                          <TableCell>{formatDateDMY(loan.disbursementDate)}</TableCell>
                           <TableCell>{formatCurrency(loan.loanAmount)}</TableCell>
                           <TableCell>{loan.noOfWeeks}</TableCell>
                           <TableCell>{formatCurrency(loan.principalOutstanding)}</TableCell>
                           <TableCell>{formatCurrency(loan.outstandingBalance)}</TableCell>
-                          <TableCell>{loan.preCloseDate ? new Date(loan.preCloseDate).toLocaleDateString() : "—"}</TableCell>
+                          <TableCell>{formatDateDMY(loan.preCloseDate)}</TableCell>
                           <TableCell>{formatCurrency(loan.totalRepayment)}</TableCell>
                           <TableCell>
                             {loan.closureRemark ? (
@@ -1038,7 +1290,7 @@ export default function LoansPage() {
                   </div>
                   <div className="space-y-1">
                     <p className="text-muted-foreground">Date</p>
-                    <p className="font-medium">{new Date(viewLoan.createdAt).toLocaleDateString()}</p>
+                    <p className="font-medium">{formatDateDMY(viewLoan.createdAt)}</p>
                   </div>
                 </div>
               )}
@@ -1112,6 +1364,243 @@ export default function LoansPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
+          <Dialog open={editDatesOpen} onOpenChange={setEditDatesOpen}>
+            <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Edit Loan</DialogTitle>
+                <DialogDescription>
+                  Correct details for {editLoan?.loanId} — member, amounts, branch mapping, dates and remarks.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2 space-y-2">
+                  <Label>Member</Label>
+                  <div className="relative">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                      <Input
+                        placeholder="Search member by name or code..."
+                        value={editSelectedMember && !editMemberOpen && !editMemberSearch ? `${editSelectedMember.firstName} ${editSelectedMember.lastName} (${editSelectedMember.memberCode})` : editMemberSearch}
+                        onChange={(e) => {
+                          setEditMemberSearch(e.target.value)
+                          setEditMemberOpen(true)
+                        }}
+                        onFocus={() => setEditMemberOpen(true)}
+                        onBlur={() => setTimeout(() => setEditMemberOpen(false), 150)}
+                        className="pl-9"
+                      />
+                    </div>
+                    {editMemberOpen && (
+                      <div className="mt-1 max-h-48 w-full overflow-y-auto rounded-md border bg-popover shadow-lg">
+                        {membersLoading ? (
+                          <div className="flex items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading members...
+                          </div>
+                        ) : editFilteredMembers.length === 0 ? (
+                          <p className="p-4 text-center text-sm text-muted-foreground">No members found</p>
+                        ) : (
+                          editFilteredMembers.map((m) => (
+                            <button
+                              key={m._id}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => handleEditMemberSelect(m._id)}
+                              className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground ${editMember === m._id ? "bg-accent/60 font-medium" : ""}`}
+                            >
+                              <span className="truncate">{m.firstName} {m.lastName} ({m.memberCode})</span>
+                              {editMember === m._id && <CheckCircle className="h-4 w-4 shrink-0 text-green-600" />}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Member and amounts cannot be changed once repayments are recorded.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>{editLoan?.loanType === "old" ? "Principal Amount" : "Loan Amount"}</Label>
+                  <Input
+                    type="number"
+                    value={editAmount || ""}
+                    onChange={(e) => setEditAmount(Number(e.target.value))}
+                    placeholder="Enter amount"
+                  />
+                </div>
+                {editLoan?.loanType === "old" ? (
+                  <div className="space-y-2">
+                    <Label>Total Amount Received</Label>
+                    <Input
+                      type="number"
+                      value={editTotalReceived || ""}
+                      onChange={(e) => setEditTotalReceived(Number(e.target.value))}
+                      placeholder="Enter total received"
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>Loan Date</Label>
+                    <Input
+                      type="date"
+                      value={editDisbursement}
+                      onChange={(e) => setEditDisbursement(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                {(editLoan?.loanType === "group" || editLoan?.loanType === "old") && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Branch</Label>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30 dark:border-border dark:text-foreground dark:[&>option]:bg-background dark:[&>option]:text-foreground"
+                        style={{ colorScheme }}
+                        value={editBranch}
+                        onChange={(e) => setEditBranch(e.target.value)}
+                        disabled={editLoan?.loanType === "old"}
+                        title={editLoan?.loanType === "old" ? "Auto-filled from member" : undefined}
+                      >
+                        <option value="">Select branch</option>
+                        {branches.map((b) => <option key={b._id} value={b._id}>{b.name} ({b.code})</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Center</Label>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30 dark:border-border dark:text-foreground dark:[&>option]:bg-background dark:[&>option]:text-foreground"
+                        style={{ colorScheme }}
+                        value={editCenter}
+                        onChange={(e) => setEditCenter(e.target.value)}
+                        disabled={editLoan?.loanType === "old"}
+                        title={editLoan?.loanType === "old" ? "Auto-filled from member" : undefined}
+                      >
+                        <option value="">Select center</option>
+                        {centers.filter((c) => !editBranch || c.branch?._id === editBranch).map((c) => (
+                          <option key={c._id} value={c._id}>{c.name} ({c.code})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Group</Label>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30 dark:border-border dark:text-foreground dark:[&>option]:bg-background dark:[&>option]:text-foreground"
+                        style={{ colorScheme }}
+                        value={editGroup}
+                        onChange={(e) => setEditGroup(e.target.value)}
+                        disabled={editLoan?.loanType === "old"}
+                        title={editLoan?.loanType === "old" ? "Auto-filled from member" : undefined}
+                      >
+                        <option value="">Select group</option>
+                        {groups.filter((g) => !editCenter || g.center?._id === editCenter).map((g) => (
+                          <option key={g._id} value={g._id}>{g.name} ({g.code})</option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                )}
+
+                {editLoan?.loanType === "bank" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Bank Name</Label>
+                      <Input
+                        value={editBankName}
+                        onChange={(e) => setEditBankName(e.target.value)}
+                        placeholder="Enter bank name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Branch Name</Label>
+                      <Input
+                        value={editBankBranch}
+                        onChange={(e) => setEditBankBranch(e.target.value)}
+                        placeholder="Enter branch name"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {editLoan?.loanType === "old" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Opening Date</Label>
+                      <Input
+                        type="date"
+                        value={editDisbursement}
+                        onChange={(e) => setEditDisbursement(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Closure Date</Label>
+                      <Input
+                        type="date"
+                        value={editClose}
+                        min={editDisbursement || undefined}
+                        onChange={(e) => setEditClose(e.target.value)}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {editLoan && ["closed", "preclosed"].includes(editLoan.status) && editLoan.loanType !== "old" && (
+                  <div className="space-y-2">
+                    <Label>Close Date</Label>
+                    <Input
+                      type="date"
+                      value={editClose}
+                      onChange={(e) => setEditClose(e.target.value)}
+                    />
+                    {editClose && (
+                      <Button variant="ghost" size="sm" onClick={() => setEditClose("")}>
+                        Clear close date
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                <div className="col-span-2 space-y-2">
+                  <Label>Remarks</Label>
+                  <Input value={editRemarks} onChange={(e) => setEditRemarks(e.target.value)} placeholder="Remarks..." />
+                </div>
+              </div>
+              {editLoan && !["closed", "preclosed"].includes(editLoan.status) && editLoan.loanType !== "old" && (
+                <p className="text-xs text-muted-foreground">
+                  Close date can be edited once the loan is closed. Use the close action to close this loan first.
+                </p>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditDatesOpen(false)}>Cancel</Button>
+                <Button onClick={handleUpdateLoan} disabled={editSaving || !editMember || !editAmount || !editDisbursement}>
+                  {editSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Loan</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete loan {deleteLoan?.loanId} for {deleteLoan?.member?.firstName} {deleteLoan?.member?.lastName} ({deleteLoan?.member?.memberCode})? This action cannot be undone.
+                  {deleteLoan && deleteLoan.outstandingBalance > 0 && (
+                    <> This loan still has an outstanding balance of {formatCurrency(deleteLoan.outstandingBalance)}.</>
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deleteSaving}>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteLoan} disabled={deleteSaving} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  {deleteSaving ? "Deleting..." : "Delete"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
   )

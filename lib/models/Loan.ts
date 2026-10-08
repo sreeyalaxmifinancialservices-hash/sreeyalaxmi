@@ -3,7 +3,7 @@ import mongoose, { Schema, Document } from "mongoose";
 export interface ILoan {
   loanId: string;
   cycleNumber: number;
-  loanType: "group" | "bank";
+  loanType: "group" | "bank" | "old";
   member: mongoose.Types.ObjectId;
   branch: mongoose.Types.ObjectId;
   center: mongoose.Types.ObjectId;
@@ -42,7 +42,7 @@ const LoanSchema = new Schema<ILoan>(
   {
     loanId: { type: String, required: true, unique: true },
     cycleNumber: { type: Number, required: true, default: 1 },
-    loanType: { type: String, enum: ["group", "bank"], default: "group" },
+    loanType: { type: String, enum: ["group", "bank", "old"], default: "group" },
     member: { type: Schema.Types.ObjectId, ref: "Member", required: true },
     branch: { type: Schema.Types.ObjectId, ref: "Branch" },
     center: { type: Schema.Types.ObjectId, ref: "Center" },

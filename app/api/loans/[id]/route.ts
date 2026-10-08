@@ -9,6 +9,7 @@ import Leader from "@/lib/models/Leader";
 import User from "@/lib/models/User";
 import { connectDB } from "@/lib/db";
 import { requireAuth, requireRole } from "@/lib/auth";
+import { applyLoanEdits, parseLoanDate, pickLoanChanges } from "@/lib/loan-edit";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -60,6 +61,37 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const user = await requireAuth();
 
+    // Direct edits (no status change) are admin-only.
+    // Staff corrections go through the edit-request approval flow.
+    if (!status) {
+      if (user.role !== "admin") {
+        return NextResponse.json(
+          { success: false, error: "Loan edits need admin approval. Please submit an edit request." },
+          { status: 403 }
+        );
+      }
+      const changes = pickLoanChanges(body);
+      if (Object.keys(changes).length === 0) {
+        return NextResponse.json(
+          { success: false, error: "Nothing to update" },
+          { status: 400 }
+        );
+      }
+      const failure = await applyLoanEdits(loan, changes);
+      if (failure) {
+        return NextResponse.json(
+          { success: false, error: failure.error },
+          { status: failure.status }
+        );
+      }
+      await loan.save();
+      return NextResponse.json({
+        success: true,
+        data: loan,
+        message: "Loan updated successfully",
+      });
+    }
+
     if (status === "approved") {
       if (!["admin"].includes(user.role)) {
         return NextResponse.json(
@@ -90,7 +122,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         );
       }
       loan.status = "disbursed";
-      loan.disbursementDate = new Date();
+      const customDisbursement = parseLoanDate(body.disbursementDate);
+      loan.disbursementDate = customDisbursement || new Date();
+      const disbWeeks = loan.noOfWeeks || 50;
+      loan.maturityDate = new Date(
+        new Date(loan.disbursementDate).getTime() + disbWeeks * 7 * 24 * 60 * 60 * 1000
+      );
       loan.outstandingBalance = loan.totalRepayment || loan.loanAmount;
     } else if (status === "active") {
       if (!["admin", "staff"].includes(user.role)) {
@@ -133,8 +170,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         loan.closureRemark = remarks || loan.closureRemark || "";
         if (remarks) loan.remarks = remarks;
         // ensure dates exist for auto-closed loans that were missing them
-        if (!loan.closedAt) loan.closedAt = new Date();
-        if (!loan.preCloseDate) loan.preCloseDate = loan.closedAt;
+        const customClosed = parseLoanDate(body.closedAt);
+        const customPreClose = parseLoanDate(body.preCloseDate);
+        if (!loan.closedAt) loan.closedAt = customClosed || new Date();
+        else if (customClosed) loan.closedAt = customClosed;
+        if (!loan.preCloseDate) loan.preCloseDate = customPreClose || loan.closedAt;
+        else if (customPreClose) loan.preCloseDate = customPreClose;
+        else if (customClosed) loan.preCloseDate = customClosed;
         await loan.save();
         return NextResponse.json({
           success: true,
@@ -150,7 +192,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
       loan.status = "closed";
       loan.closedBy = user.id;
-      loan.closedAt = new Date();
+      const customClosedAt = parseLoanDate(body.closedAt);
+      const customPreCloseDate = parseLoanDate(body.preCloseDate);
+      loan.closedAt = customClosedAt || new Date();
+      loan.preCloseDate = customPreCloseDate || loan.closedAt;
       loan.closureRemark = remarks || "";
 
       const outstandingAmount = loan.outstandingBalance || 0;
@@ -203,10 +248,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     } else if (status === "preclosed") {
       loan.status = "preclosed";
-      loan.preCloseDate = new Date();
+      const customPre = parseLoanDate(body.preCloseDate);
+      const customClosedPre = parseLoanDate(body.closedAt);
+      loan.preCloseDate = customPre || new Date();
       loan.preCloseAmount = loan.outstandingBalance;
       loan.outstandingBalance = 0;
-      loan.closedAt = new Date();
+      loan.closedAt = customClosedPre || new Date();
       loan.closureRemark = remarks || loan.closureRemark;
     } else {
       return NextResponse.json(
@@ -230,6 +277,72 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         { success: false, error: error.message },
         { status: error.message === "Unauthorized" ? 401 : 403 }
       );
+    }
+    return NextResponse.json(
+      { success: false, error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    await connectDB();
+
+    const { id } = await params;
+    const user = await requireAuth();
+
+    if (user.role !== "admin") {
+      return NextResponse.json(
+        { success: false, error: "Only admin can delete loans" },
+        { status: 403 }
+      );
+    }
+
+    const loan = await Loan.findById(id);
+    if (!loan) {
+      return NextResponse.json(
+        { success: false, error: "Loan not found" },
+        { status: 404 }
+      );
+    }
+
+    // Protect financial history: loans with repayments cannot be deleted
+    const repaymentCount = await Repayment.countDocuments({ loan: id });
+    if (repaymentCount > 0) {
+      return NextResponse.json(
+        { success: false, error: "Cannot delete loan with repayments recorded. Close the loan instead." },
+        { status: 400 }
+      );
+    }
+
+    await Loan.findByIdAndDelete(id);
+
+    // Auto-reject any pending loan edit requests for the deleted loan
+    try {
+      const Inquiry = (await import("@/lib/models/Inquiry")).default;
+      await Inquiry.updateMany(
+        { type: "loan_edit", "editRequest.entityId": id, status: "pending" },
+        {
+          $set: { status: "rejected", remarks: "Loan was deleted" },
+          $push: {
+            history: {
+              action: "Auto-rejected: loan deleted",
+              date: new Date(),
+              remarks: "Loan was deleted",
+            },
+          },
+        }
+      );
+    } catch (e) {
+      console.error("Failed to cleanup loan edit requests:", e);
+    }
+
+    return NextResponse.json({ success: true, message: "Loan deleted successfully" });
+  } catch (error: any) {
+    console.error(error);
+    if (error.message === "Unauthorized") {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
     return NextResponse.json(
       { success: false, error: "Internal Server Error" },

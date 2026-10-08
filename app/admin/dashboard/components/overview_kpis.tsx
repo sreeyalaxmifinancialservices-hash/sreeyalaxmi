@@ -62,7 +62,7 @@ export function OverviewKpis() {
       <div className="grid grid-cols-1 xl:grid-cols-8">
         <Card className="gap-5 overflow-hidden rounded-none border-0 border-foreground/10 border-b ring-0 xl:col-span-4 xl:border-r">
           <CardHeader>
-            <CardTitle className="font-normal">Outstanding Loans</CardTitle>
+            <CardTitle className="font-normal">Outstanding Loans (Due)</CardTitle>
           </CardHeader>
           <CardContent className="flex items-end justify-between">
             <div className="space-y-1">

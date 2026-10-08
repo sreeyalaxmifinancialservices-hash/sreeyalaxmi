@@ -83,12 +83,15 @@ export const leaderSchema = z.object({
 });
 
 export const loanSchema = z.object({
-  loanType: z.enum(["group", "bank"]).default("group"),
+  loanType: z.enum(["group", "bank", "old"]).default("group"),
   member: z.string().min(1, "Member is required"),
   branch: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
   center: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
   group: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
   loanAmount: z.number().min(1, "Loan amount is required"),
+  totalReceived: z.preprocess((v) => (v === "" || v === undefined ? undefined : v), z.number().min(0).optional()),
+  openingDate: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  closureDate: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
   insuranceAmount: z.number().min(0).default(0),
   processingFee: z.number().min(0).default(0),
   loanFees: z.number().min(0).default(0),
@@ -101,12 +104,12 @@ export const loanSchema = z.object({
   bankBranchName: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
 }).refine(
   (data) => {
-    if (data.loanType === "group") {
+    if (data.loanType === "group" || data.loanType === "old") {
       return !!data.branch && !!data.center && !!data.group;
     }
     return true;
   },
-  { message: "Branch, Center, and Group are required for Group Loan" }
+  { message: "Branch, Center, and Group are required for Group / Old Loan" }
 ).refine(
   (data) => {
     if (data.loanType === "bank") {
@@ -115,6 +118,21 @@ export const loanSchema = z.object({
     return true;
   },
   { message: "Bank Name and Branch Name are required for Bank Loan" }
+).refine(
+  (data) => {
+    if (data.loanType === "old") {
+      return (
+        data.totalReceived !== undefined &&
+        !!data.openingDate &&
+        !!data.closureDate &&
+        !isNaN(new Date(data.openingDate).getTime()) &&
+        !isNaN(new Date(data.closureDate).getTime()) &&
+        new Date(data.closureDate) >= new Date(data.openingDate)
+      );
+    }
+    return true;
+  },
+  { message: "Principal, total received, opening and closure dates are required for Old Loan (closure must be on/after opening)" }
 );
 
 export const repaymentSchema = z.object({
@@ -163,7 +181,7 @@ export const collectionSchema = z.object({
 export const inquirySchema = z.object({
   member: z.string().optional(),
   branch: z.string().optional(),
-  type: z.enum(["kyc", "address_verification", "document_verification", "field_visit", "member_edit", "leader_edit", "center_edit", "member_add", "member_delete", "group_add", "group_edit", "group_delete"]),
+   type: z.enum(["kyc", "address_verification", "document_verification", "field_visit", "member_edit", "leader_edit", "center_edit", "member_add", "member_delete", "group_add", "group_edit", "group_delete", "loan_edit"]),
   assignedTo: z.string().optional(),
   remarks: z.string().optional(),
 });

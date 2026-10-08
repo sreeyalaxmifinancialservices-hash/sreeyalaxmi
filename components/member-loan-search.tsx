@@ -36,7 +36,7 @@ interface LoanResult {
   _id: string
   loanId: string
   cycleNumber: number
-  loanType: "group" | "bank"
+  loanType: "group" | "bank" | "old"
   loanAmount: number
   insuranceAmount: number
   processingFee: number
@@ -241,7 +241,7 @@ export function MemberLoanSearch({ apiBase, role }: { apiBase: string; role: "ad
     `${m.firstName} ${m.lastName}`.trim(),
     l.loanId,
     l.cycleNumber,
-    l.loanType === "bank" ? "Bank Loan" : "Group Loan",
+    l.loanType === "bank" ? "Bank Loan" : l.loanType === "old" ? "Old Loan" : "Group Loan",
     l.loanAmount,
     l.disbursementDate ? new Date(l.disbursementDate).toLocaleDateString() : "",
     l.maturityDate ? new Date(l.maturityDate).toLocaleDateString() : "",
@@ -573,7 +573,7 @@ export function MemberLoanSearch({ apiBase, role }: { apiBase: string; role: "ad
                           <TableCell>{loan.loanId}</TableCell>
                           <TableCell>
                             <Badge variant={loan.loanType === "bank" ? "default" : "secondary"}>
-                              {loan.loanType === "bank" ? "Bank" : "Group"}
+                              {loan.loanType === "bank" ? "Bank" : loan.loanType === "old" ? "Old" : "Group"}
                             </Badge>
                           </TableCell>
                           <TableCell>{fmtCurrency(loan.loanAmount)}</TableCell>

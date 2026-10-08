@@ -5,7 +5,11 @@ import Inquiry from "@/lib/models/Inquiry";
 import Member from "@/lib/models/Member";
 import Leader from "@/lib/models/Leader";
 import Center from "@/lib/models/Center";
+import Branch from "@/lib/models/Branch";
+import Group from "@/lib/models/Group";
+import Loan from "@/lib/models/Loan";
 import Staff from "@/lib/models/Staff";
+import { parseLoanDate } from "@/lib/loan-edit";
 
 export async function GET(req: NextRequest) {
   try {
@@ -24,7 +28,7 @@ export async function GET(req: NextRequest) {
 
     const filter: Record<string, any> = {
       submittedBy: user._id,
-      type: { $in: ["member_edit", "leader_edit", "center_edit", "member_delete", "group_edit", "group_delete"] },
+      type: { $in: ["member_edit", "leader_edit", "center_edit", "member_delete", "group_edit", "group_delete", "loan_edit"] },
     };
 
     if (status && status !== "all") filter.status = status;
@@ -34,7 +38,7 @@ export async function GET(req: NextRequest) {
 
     const [requests, total] = await Promise.all([
       Inquiry.find(filter)
-        .populate("editRequest.entityId", "name firstName lastName memberCode code")
+        .populate("editRequest.entityId", "name firstName lastName memberCode code loanId loanAmount")
         .populate("memberRequest.memberId", "firstName lastName memberCode")
         .populate({ path: "groupRequest.groupId", select: "name code", strictPopulate: false })
         .sort({ createdAt: -1 })
@@ -77,8 +81,8 @@ export async function POST(req: NextRequest) {
     }
 
     let entity: any;
-    let entityTypeLabel: "member" | "leader" | "center";
-    let inquiryType: "member_edit" | "leader_edit" | "center_edit";
+    let entityTypeLabel: "member" | "leader" | "center" | "loan";
+    let inquiryType: "member_edit" | "leader_edit" | "center_edit" | "loan_edit";
     let entityName: string;
 
     if (entityType === "member") {
@@ -105,9 +109,22 @@ export async function POST(req: NextRequest) {
       entityTypeLabel = "center";
       inquiryType = "center_edit";
       entityName = entity.name;
+    } else if (entityType === "loan") {
+      entity = await Loan.findById(entityId)
+        .populate("member", "firstName lastName memberCode")
+        .populate("branch", "name code")
+        .populate("center", "name code")
+        .populate("group", "name code")
+        .lean();
+      if (!entity) {
+        return NextResponse.json({ success: false, error: "Loan not found" }, { status: 404 });
+      }
+      entityTypeLabel = "loan";
+      inquiryType = "loan_edit";
+      entityName = `${entity.loanId} - ${entity.member?.firstName || ""} ${entity.member?.lastName || ""}`.trim();
     } else {
       return NextResponse.json(
-        { success: false, error: "Invalid entityType. Must be member, leader, or center" },
+        { success: false, error: "Invalid entityType. Must be member, leader, center, or loan" },
         { status: 400 }
       );
     }
@@ -116,17 +133,30 @@ export async function POST(req: NextRequest) {
       member: ["firstName", "lastName", "guardianName", "phone", "email", "aadhaar", "pan", "dob", "gender", "address"],
       leader: ["firstName", "lastName", "phone", "email"],
       center: ["name", "meetingDay", "meetingTime", "location"],
+      loan: ["member", "loanAmount", "totalReceived", "branch", "center", "group", "bankName", "bankBranchName", "remarks", "disbursementDate", "closedAt", "preCloseDate"],
     };
+
+    const idOf = (v: any): string => (v?._id ? String(v._id) : v ? String(v) : "");
 
     const allowed = editableFields[entityType];
     const oldValues: Record<string, any> = {};
     const filteredNewValues: Record<string, any> = {};
+    const displayNames: Record<string, { old?: string; new?: string }> = {};
+
+    const refName = (doc: any): string => {
+      if (!doc) return "";
+      if (doc.firstName) return `${doc.firstName} ${doc.lastName || ""}`.trim() + (doc.memberCode ? ` (${doc.memberCode})` : "");
+      return `${doc.name || ""}${doc.code ? ` (${doc.code})` : ""}`.trim();
+    };
 
     for (const field of allowed) {
       if (newValues[field] !== undefined) {
         if (field === "address" && entityType === "member") {
           oldValues.address = entity.address || {};
           filteredNewValues.address = newValues.address;
+        } else if (entityType === "loan" && ["member", "branch", "center", "group"].includes(field)) {
+          oldValues[field] = idOf(entity[field]);
+          filteredNewValues[field] = newValues[field];
         } else {
           oldValues[field] = entity[field];
           filteredNewValues[field] = newValues[field];
@@ -141,13 +171,58 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Loan-specific checks: valid references/values + no duplicate pending request
+    if (entityType === "loan") {
+      const existing = await Inquiry.findOne({
+        type: "loan_edit",
+        "editRequest.entityId": entity._id,
+        status: "pending",
+      }).lean();
+      if (existing) {
+        return NextResponse.json(
+          { success: false, error: "An edit request for this loan is already pending approval" },
+          { status: 400 }
+        );
+      }
+      if (filteredNewValues.member) {
+        const m = await Member.findById(filteredNewValues.member).lean();
+        if (!m) {
+          return NextResponse.json({ success: false, error: "Selected member not found" }, { status: 404 });
+        }
+      }
+      if (filteredNewValues.loanAmount !== undefined && Number(filteredNewValues.loanAmount) < 1) {
+        return NextResponse.json({ success: false, error: "Loan amount must be greater than 0" }, { status: 400 });
+      }
+      if (filteredNewValues.totalReceived !== undefined && Number(filteredNewValues.totalReceived) < 0) {
+        return NextResponse.json({ success: false, error: "Total amount received must be 0 or more" }, { status: 400 });
+      }
+      for (const df of ["disbursementDate", "closedAt", "preCloseDate"] as const) {
+        if (filteredNewValues[df] !== undefined && filteredNewValues[df] !== "" && filteredNewValues[df] !== null && !parseLoanDate(filteredNewValues[df])) {
+          return NextResponse.json({ success: false, error: `Invalid ${df === "disbursementDate" ? "loan date" : "close date"}` }, { status: 400 });
+        }
+      }
+      // Human-readable names for reference fields (used by review screens)
+      const refModels: Record<string, any> = { member: Member, branch: Branch, center: Center, group: Group };
+      for (const field of ["member", "branch", "center", "group"]) {
+        if (filteredNewValues[field] !== undefined) {
+          const newDoc = filteredNewValues[field]
+            ? await (refModels[field] as any).findById(filteredNewValues[field]).lean()
+            : null;
+          displayNames[field] = {
+            old: refName(entity[field]) || "—",
+            new: filteredNewValues[field] ? refName(newDoc) || String(filteredNewValues[field]) : "—",
+          };
+        }
+      }
+    }
+
     const inquiryCount = await Inquiry.countDocuments();
     const inquiryNumber = `INQ${String(inquiryCount + 1).padStart(6, "0")}`;
 
     const inquiry = await Inquiry.create({
       inquiryNumber,
       type: inquiryType,
-      branch: entity.branch,
+      branch: idOf(entity.branch) || undefined,
       submittedBy: user._id,
       status: "pending",
       editRequest: {
@@ -156,6 +231,7 @@ export async function POST(req: NextRequest) {
         entityName,
         oldValues,
         newValues: filteredNewValues,
+        ...(entityType === "loan" ? { displayNames } : {}),
       },
       history: [
         {

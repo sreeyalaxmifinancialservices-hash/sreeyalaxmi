@@ -4,7 +4,7 @@ export interface IInquiry extends Document {
   inquiryNumber: string;
   member?: mongoose.Types.ObjectId;
   branch?: mongoose.Types.ObjectId;
-  type: "kyc" | "address_verification" | "document_verification" | "field_visit" | "member_edit" | "leader_edit" | "center_edit" | "member_add" | "member_delete" | "group_add" | "group_edit" | "group_delete" | "leader_add" | "leader_delete";
+  type: "kyc" | "address_verification" | "document_verification" | "field_visit" | "member_edit" | "leader_edit" | "center_edit" | "member_add" | "member_delete" | "group_add" | "group_edit" | "group_delete" | "leader_add" | "leader_delete" | "loan_edit";
   status: "pending" | "in_progress" | "completed" | "rejected";
   assignedTo?: mongoose.Types.ObjectId;
   remarks?: string;
@@ -14,11 +14,12 @@ export interface IInquiry extends Document {
     verified: boolean;
   }[];
   editRequest?: {
-    entityType: "member" | "leader" | "center";
+    entityType: "member" | "leader" | "center" | "loan";
     entityId: mongoose.Types.ObjectId;
     entityName: string;
     oldValues: Record<string, any>;
     newValues: Record<string, any>;
+    displayNames?: Record<string, { old?: string; new?: string }>;
   };
   memberRequest?: {
     action: "add" | "delete";
@@ -58,7 +59,7 @@ const InquirySchema = new Schema<IInquiry>(
     branch: { type: Schema.Types.ObjectId, ref: "Branch" },
     type: {
       type: String,
-      enum: ["kyc", "address_verification", "document_verification", "field_visit", "member_edit", "leader_edit", "center_edit", "member_add", "member_delete", "group_add", "group_edit", "group_delete", "leader_add", "leader_delete"],
+      enum: ["kyc", "address_verification", "document_verification", "field_visit", "member_edit", "leader_edit", "center_edit", "member_add", "member_delete", "group_add", "group_edit", "group_delete", "leader_add", "leader_delete", "loan_edit"],
       required: true,
     },
     status: {
@@ -76,11 +77,12 @@ const InquirySchema = new Schema<IInquiry>(
       },
     ],
     editRequest: {
-      entityType: { type: String, enum: ["member", "leader", "center"] },
+      entityType: { type: String, enum: ["member", "leader", "center", "loan"] },
       entityId: { type: Schema.Types.ObjectId },
       entityName: { type: String },
       oldValues: { type: Schema.Types.Mixed },
       newValues: { type: Schema.Types.Mixed },
+      displayNames: { type: Schema.Types.Mixed },
     },
     memberRequest: {
       action: { type: String, enum: ["add", "delete"] },
@@ -117,4 +119,5 @@ const InquirySchema = new Schema<IInquiry>(
   { timestamps: true }
 );
 
-export default mongoose.models.Inquiry || mongoose.model("Inquiry", InquirySchema);
+delete mongoose.models.Inquiry;
+export default mongoose.model("Inquiry", InquirySchema);

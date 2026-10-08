@@ -24,17 +24,18 @@ export function useNotificationCounts(role: "admin" | "staff") {
   const fetchCounts = useCallback(async () => {
     try {
       if (role === "admin") {
-        const [inquiriesRes, centerRequestsRes, membersRes, loansRes, groupAssignRes] = await Promise.all([
+        const [inquiriesRes, centerRequestsRes, membersRes, loansRes, groupAssignRes, loanEditsRes] = await Promise.all([
           fetch("/api/inquiries?status=pending&limit=1").then((r) => r.json()),
           fetch("/api/admin/center-requests?status=pending&limit=1").then((r) => r.json()),
           fetch("/api/members?verificationStatus=pending&limit=1").then((r) => r.json()),
           fetch("/api/loans?status=pending&limit=1").then((r) => r.json()),
           fetch("/api/center-assigned-collection?status=Pending%20Review&limit=1").then((r) => r.json()),
+          fetch("/api/inquiries?type=loan_edit&status=pending&limit=1").then((r) => r.json()),
         ])
         setCounts({
           pendingInquiries: inquiriesRes.pagination?.total || 0,
           pendingCenterRequests: centerRequestsRes.pagination?.total || 0,
-          pendingEditRequests: 0,
+          pendingEditRequests: loanEditsRes.pagination?.total || 0,
           pendingMemberVerifications: membersRes.pagination?.total || 0,
           pendingLoans: loansRes.pagination?.total || 0,
           pendingGroupAssignments: groupAssignRes.pagination?.total || 0,

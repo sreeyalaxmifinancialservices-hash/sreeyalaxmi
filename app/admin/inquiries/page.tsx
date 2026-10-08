@@ -34,11 +34,12 @@ import { toast } from "sonner"
 import { Plus, Search, Loader2, Eye } from "lucide-react"
 
 interface EditRequest {
-  entityType: "member" | "leader" | "center"
+  entityType: "member" | "leader" | "center" | "loan"
   entityId: string
   entityName: string
   oldValues: Record<string, any>
   newValues: Record<string, any>
+  displayNames?: Record<string, { old?: string; new?: string }>
 }
 
 interface MemberRequest {
@@ -91,6 +92,7 @@ const typeLabels: Record<string, string> = {
   group_add: "Group Add",
   group_edit: "Group Edit",
   group_delete: "Group Delete",
+  loan_edit: "Loan Edit",
   leader_add: "Leader Add",
   leader_delete: "Leader Delete",
 }
@@ -121,6 +123,33 @@ const editFieldLabels: Record<string, string> = {
   city: "City",
   state: "State",
   pincode: "Pincode",
+  member: "Member",
+  loanAmount: "Loan Amount",
+  totalReceived: "Total Received",
+  branch: "Branch",
+  center: "Center",
+  group: "Group",
+  bankName: "Bank Name",
+  bankBranchName: "Bank Branch",
+  remarks: "Remarks",
+  disbursementDate: "Loan Date",
+  closedAt: "Close Date",
+  preCloseDate: "Pre-Close Date",
+}
+
+const formatLoanValue = (val: any, field: string) => {
+  if (val === undefined || val === null || val === "") return "—"
+  if (["disbursementDate", "closedAt", "preCloseDate"].includes(field)) {
+    const d = new Date(val)
+    if (isNaN(d.getTime())) return "—"
+    const dd = String(d.getDate()).padStart(2, "0")
+    const mm = String(d.getMonth() + 1).padStart(2, "0")
+    return `${dd}-${mm}-${d.getFullYear()}`
+  }
+  if (["loanAmount", "totalReceived"].includes(field) && !isNaN(Number(val))) {
+    return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(val))
+  }
+  return String(val)
 }
 
 export default function InquiriesPage() {
@@ -270,6 +299,9 @@ export default function InquiriesPage() {
                 const oldVal = editRequest.oldValues[field]
                 const newVal = editRequest.newValues[field]
                 const isAddress = field === "address"
+                const isLoanRef = editRequest.entityType === "loan" && ["member", "branch", "center", "group"].includes(field)
+                const isLoanValue = editRequest.entityType === "loan" && !isLoanRef
+                const disp = editRequest.displayNames?.[field]
 
                 return (
                   <TableRow key={field}>
@@ -279,6 +311,10 @@ export default function InquiriesPage() {
                         <span className="text-muted-foreground text-xs">
                           {oldVal?.street}, {oldVal?.city}, {oldVal?.state} - {oldVal?.pincode}
                         </span>
+                      ) : isLoanRef ? (
+                        <span className="text-muted-foreground">{disp?.old || "—"}</span>
+                      ) : isLoanValue ? (
+                        <span className="text-muted-foreground">{formatLoanValue(oldVal, field)}</span>
                       ) : (
                         <span className="text-muted-foreground">{String(oldVal ?? "—")}</span>
                       )}
@@ -288,6 +324,10 @@ export default function InquiriesPage() {
                         <span className="text-green-600 font-medium text-xs">
                           {newVal?.street}, {newVal?.city}, {newVal?.state} - {newVal?.pincode}
                         </span>
+                      ) : isLoanRef ? (
+                        <span className="text-green-600 font-medium">{disp?.new || String(newVal ?? "—")}</span>
+                      ) : isLoanValue ? (
+                        <span className="text-green-600 font-medium">{formatLoanValue(newVal, field)}</span>
                       ) : (
                         <span className="text-green-600 font-medium">{String(newVal ?? "—")}</span>
                       )}
@@ -329,6 +369,7 @@ export default function InquiriesPage() {
               <SelectItem value="group_add">Group Add</SelectItem>
               <SelectItem value="group_edit">Group Edit</SelectItem>
               <SelectItem value="group_delete">Group Delete</SelectItem>
+              <SelectItem value="loan_edit">Loan Edit</SelectItem>
               <SelectItem value="leader_add">Leader Add</SelectItem>
               <SelectItem value="leader_edit">Leader Edit</SelectItem>
               <SelectItem value="leader_delete">Leader Delete</SelectItem>
