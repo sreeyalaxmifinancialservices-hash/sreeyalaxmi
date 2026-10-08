@@ -47,6 +47,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
+    const search = searchParams.get("search") || "";
     const centerId = searchParams.get("centerId");
     const status = searchParams.get("status");
     const all = searchParams.get("all") === "true";
@@ -68,6 +69,33 @@ export async function GET(req: NextRequest) {
     if (status) {
       const statuses = status.split(",").map((s) => s.trim());
       filter.status = statuses.length > 1 ? { $in: statuses } : statuses[0];
+    }
+
+    if (search.trim()) {
+      const q = search.trim();
+      const parts = q.split(/\s+/).filter(Boolean);
+      const memberOr: Record<string, any>[] = [
+        { firstName: { $regex: q, $options: "i" } },
+        { lastName: { $regex: q, $options: "i" } },
+        { memberCode: { $regex: q, $options: "i" } },
+        { phone: { $regex: q, $options: "i" } },
+      ];
+      if (parts.length > 1) {
+        memberOr.push({
+          $and: [
+            { firstName: { $regex: parts[0], $options: "i" } },
+            { lastName: { $regex: parts.slice(1).join(" "), $options: "i" } },
+          ],
+        });
+      }
+      const matchingMembers = await Member.find({ $or: memberOr })
+        .select("_id")
+        .limit(200)
+        .lean();
+      filter.$or = [
+        { loanId: { $regex: q, $options: "i" } },
+        { member: { $in: matchingMembers.map((m) => m._id) } },
+      ];
     }
 
     const [loans, total] = await Promise.all([

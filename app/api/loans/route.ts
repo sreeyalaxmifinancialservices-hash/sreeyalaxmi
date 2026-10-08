@@ -50,9 +50,35 @@ export async function GET(req: NextRequest) {
     const filter: Record<string, any> = {};
 
     if (search) {
-      filter.$or = [
-        { loanId: { $regex: search, $options: "i" } },
+      const q = search.trim();
+      const orConditions: Record<string, any>[] = [
+        { loanId: { $regex: q, $options: "i" } },
       ];
+      // Match members by name / code / phone, then match their loans.
+      // Supports "firstname lastname" queries too.
+      const parts = q.split(/\s+/).filter(Boolean);
+      const memberOr: Record<string, any>[] = [
+        { firstName: { $regex: q, $options: "i" } },
+        { lastName: { $regex: q, $options: "i" } },
+        { memberCode: { $regex: q, $options: "i" } },
+        { phone: { $regex: q, $options: "i" } },
+      ];
+      if (parts.length > 1) {
+        memberOr.push({
+          $and: [
+            { firstName: { $regex: parts[0], $options: "i" } },
+            { lastName: { $regex: parts.slice(1).join(" "), $options: "i" } },
+          ],
+        });
+      }
+      const matchingMembers = await Member.find({ $or: memberOr })
+        .select("_id")
+        .limit(200)
+        .lean();
+      orConditions.push({
+        member: { $in: matchingMembers.map((m) => m._id) },
+      });
+      filter.$or = orConditions;
     }
 
     if (status) {
